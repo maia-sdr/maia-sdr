@@ -1,0 +1,6 @@
+[submodule "maia-hdl/adi-hdl"]
+	path = maia-hdl/adi-hdl
+	url = https://github.com/analogdevicesinc/hdl
+[submodule "maia-hdl/XilinxUnisimLibrary"]
+	path = maia-hdl/XilinxUnisimLibrary
+	url = https://github.com/Xilinx/XilinxUnisimLibrary/

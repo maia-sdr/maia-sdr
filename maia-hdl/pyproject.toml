@@ -1,0 +1,37 @@
+[project]
+name = "maia_hdl"
+version = "0.1.0"
+authors = [
+  { name="Daniel Estevez", email="daniel@destevez.net" },
+]
+maintainers = [
+  { name="Daniel Estevez", email="daniel@destevez.net" },
+]
+description = "Maia SDR FPGA Amaranth HDL code"
+readme = "README.md"
+requires-python = ">=3.7"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Communications :: Ham Radio",
+    "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
+    "Topic :: Scientific/Engineering",
+]
+dependencies = [
+    "amaranth @ git+https://github.com/amaranth-lang/amaranth",
+    "numpy",
+    "scipy",
+]
+
+[project.urls]
+"Homepage" = "https://maia-sdr.org/"
+"Bug Tracker" = "https://github.com/maia-sdr/maia-sdr/issues"
+"Source Code" = "https://github.com/maia-sdr/maia-sdr"
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.metadata]
+allow-direct-references = true

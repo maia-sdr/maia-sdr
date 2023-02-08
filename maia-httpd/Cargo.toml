@@ -1,0 +1,40 @@
+[package]
+name = "maia-httpd"
+version = "0.1.0"
+edition = "2021"
+authors = ["Daniel Estevez <daniel@destevez.net>"]
+description = "Maia SDR HTTP server"
+license = "MIT OR Apache-2.0"
+homepage = "https://maia-sdr.org/"
+repository = "https://github.com/maia-sdr/maia-sdr/"
+keywords = ["SDR", "FPGA", "Zynq"]
+categories = ["hardware-support", "science", "web-programming::http-server", "web-programming::websocket"]
+
+[dependencies]
+anyhow = { version = "1.0", features = ["std"] } 
+axum = { version = "0.6", features = ["default", "ws"] }
+bytes = "1.2"
+chrono = "0.4"
+clap = { version = "4.0", features = ["derive"] }
+futures = "0.3"
+http = "0.2"
+hyper = "0.14"
+libc = "0.2"
+maia-json = { path = "maia-json" }
+maia-pac = { path = "maia-pac" }
+nix = "0.26"
+page_size = "0.5"
+paste = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tokio = { version = "1", features = ["full"] }
+tokio-stream = { version = "0.1", features = ["sync"] }
+tokio-tar = "0.3"
+tokio-util = { version = "0.7", features = ["full"] }
+tower-http = { version = "0.3", features = ["fs", "trace"] }
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[profile.release]
+lto = true
+strip = "debuginfo"

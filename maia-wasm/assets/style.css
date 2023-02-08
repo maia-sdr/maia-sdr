@@ -1,0 +1,253 @@
+/* Color schemes */
+
+/* Default light mode */
+:root {
+    --background-color: white;
+    --text-color: black;
+    --line-color: black;
+
+    --focus-outline-color: rgba(208, 208, 255, 0.5);
+
+    --input-bg-color: #f8f8f8;
+    --input-highlight-color: #e8e8ff;
+    --input-bg-invalid-color: #ffb0b0;
+
+    --button-color: #ddd;
+    --button-highlight-color: #bbb;
+
+    /* Record button */
+    --record-color: #9d9;
+    --record-highlight-color: #7b7;
+    --stop-color: #d99;
+    --stop-highlight-color: #b77;
+}
+
+@media (prefers-color-scheme: dark) {
+    /* Dark mode */
+    :root {
+        --background-color: black;
+        --text-color: white;
+        --line-color: white;
+
+        --focus-outline-color: rgba(208, 208, 255, 0.5);
+
+        --input-bg-color: #222;
+        --input-highlight-color: #227;
+        --input-bg-invalid-color: #ffb0b0;
+
+        --button-color: #444;
+        --button-highlight-color: #777;
+
+        /* Record button */
+        --record-color: #9d9;
+        --record-highlight-color: #7b7;
+        --stop-color: #d99;
+        --stop-highlight-color: #b77;
+    }
+}
+
+/* Styles */
+:root {
+    --focus-outline: 3px solid var(--focus-outline-color);
+}
+
+/* Top level rules */
+
+body {
+    user-select: none;
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ */
+}
+
+#canvas {
+    touch-action: none;
+    width: 100vw;
+    height: 80vh;
+}
+
+html {
+    font-family: Helvetica, Arial, sans-serif;
+}
+
+body {
+    margin: 0px 0px 0px 0px;
+    padding: 0px 0px 0px 0px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+/* Dialog */
+
+dialog {
+    background-color: var(--background-color);
+    color: var(--text-color);
+    border: none;
+    padding: 20px;
+}
+
+dialog::backdrop {
+  background: rgba(0, 0, 0, 0.5);
+}
+
+/* Forms */
+
+/* Reset forms properties that are sometimes overridden by browsers */
+
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: 100%;
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+    outline: none;
+}
+
+textarea {
+  overflow: auto;
+}
+
+/* Forms styling */
+
+button,
+input,
+select,
+textarea {
+    color: var(--text-color);
+    border: 1px solid var(--line-color);
+    padding: 2px;
+}
+
+input,
+textarea {
+    background-color: var(--input-bg-color);
+}
+
+button,
+select {
+    background-color: var(--button-color);
+}
+
+a:focus,
+button:focus,
+select:focus {
+    outline: var(--focus-outline);
+}
+
+input:focus {
+    background-color: var(--input-highlight-color);
+}
+
+button:hover,
+select:hover {
+    background-color: var(--button-highlight-color);
+}
+
+input:invalid {
+    background-color: var(--input-bg-invalid-color);
+}
+
+/* UI form */
+
+.ui {
+    font-size: 0.875rem;
+}
+
+form.ui {
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    justify-content: space-around;
+    column-gap: 20px;
+    row-gap: 10px;
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.ui fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+.waterfall_levels input {
+    width: 4em;
+}
+
+input.rf_frequency {
+    width: 7em;
+}
+
+input.baseband_frequency {
+    width: 5.5em;
+}
+
+input.gain {
+    width: 3.5em;
+}
+
+#spectrometer_output_sampling_frequency {
+    width: 5em;
+}
+
+/* Record / Stop button */
+
+#recorder_button {
+    width: 5em;
+    background-color: var(--record-color);
+}
+
+#recorder_button:hover {
+    background-color: var(--record-highlight-color);
+}
+
+#recorder_button.stop_button {
+    background-color: var(--stop-color);
+}
+
+#recorder_button.stop_button:hover {
+    background-color: var(--stop-highlight-color);
+}
+
+/* Recording form (dialog) */
+
+#recording_form {
+    display: grid;
+    width: min(max(25em, 80vw), 40em);
+    grid-template-columns: auto 1fr auto auto;
+    row-gap: 10px;
+    column-gap: 10px;
+    align-items: center;
+}
+
+#recording_form label {
+    grid-column: 1/2;
+}
+
+#recording_form input,
+#recording_form select {
+    grid-column: 2/5;
+}
+
+#download_recording {
+    grid-column: 3/4;
+}
+
+#close_recording_dialog {
+    grid-column: 4/5;
+}
+
+#download_recording {
+    color: var(--text-color);
+    text-decoration: none;
+    text-align: center;
+    border: 1px solid var(--line-color);
+    padding: 2px;
+    background-color: var(--button-color);
+}
+
+#download_recording:hover {
+    background-color: var(--button-highlight-color);
+}

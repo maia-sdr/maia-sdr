@@ -1,0 +1,14 @@
+[package]
+name = "maia-pac"
+version = "0.1.0"
+edition = "2021"
+authors = ["Daniel Estevez <daniel@destevez.net>"]
+description = "Maia SDR peripheral access crate"
+license = "MIT OR Apache-2.0"
+homepage = "https://maia-sdr.org/"
+repository = "https://github.com/maia-sdr/maia-sdr/"
+keywords = ["SDR", "FPGA", "Zynq"]
+categories = ["hardware-support", "science"]
+
+[dependencies]
+vcell = "0.1"

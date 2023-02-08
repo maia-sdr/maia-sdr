@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
+    <title>Maia SDR</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="/maia-icon-32x32.png">
+    <link rel="icon" type="image/png" sizes="128x128" href="/maia-icon-128x128.png">
+    <link rel="icon" type="image/png" sizes="180x180" href="/maia-icon-180x180.png">
+    <link rel="icon" type="image/png" sizes="192x192" href="/maia-icon-192x192.png">
+    <link rel="apple-touch-icon" type="image/png" sizes="32x32" href="/maia-icon-32x32.png">
+    <link rel="apple-touch-icon" type="image/png" sizes="128x128" href="/maia-icon-128x128.png">
+    <link rel="apple-touch-icon" type="image/png" sizes="180x180" href="/maia-icon-180x180.png">
+    <link rel="apple-touch-icon" type="image/png" sizes="192x192" href="/maia-icon-192x192.png">
+    <link rel="manifest" href="./manifest.json">
+    <link rel="stylesheet" href="./style.css">
+    <script type="module" src="./index.js"></script>
+  </head>
+  <body>
+
+    <dialog class="ui" id="recording_dialog">
+      <form method="dialog" id="recording_form">
+        <label for="recording_metadata_file">Filename</label>
+        <input type="text" id="recording_metadata_filename">
+        <label for="recording_metadata_description">Description</label>
+        <input type="text" id="recording_metadata_description">
+        <label for="recording_metadata_author">Author</label>
+        <input type="text" id="recording_metadata_author">
+        <label for="recorder_mode">Mode</label>
+        <select id="recorder_mode">
+          <option>8 bit IQ</option>
+          <option>12 bit IQ</option>
+        </select>
+        <a id="download_recording" href="/recording" download>Download recording</a>
+        <button id="close_recording_dialog" value="close" autofocus>Close</button>
+      </form>
+    </dialog>
+
+    <canvas id="canvas"></canvas>
+
+    <form class="ui">
+      <label>Colormap
+        <select id="colormap_select">
+	  <option>Turbo</option>
+	  <option>Viridis</option>
+        </select>
+      </label>
+      <fieldset class="waterfall_levels">
+        <label for="waterfall_min">Waterfall min</label>/<label for="waterfall_max">max</label>
+        <input type="number" id="waterfall_min" value="35" step="1" min="0">
+        <input type="number" id="waterfall_max" value="85" step="1" min="0">
+      </fieldset>
+      <label>RX freq
+        <input type="number" class="rf_frequency" id="ad9361_rx_lo_frequency" step="0.001" min="70" max="6000">
+        MHz
+      </label>
+      <label>Sampling freq
+        <input type="number" class="baseband_frequency" id="ad9361_sampling_frequency" step="0.001" max="61.44">
+        Msps
+      </label>
+      <label>RX bandwidth
+        <input type="number" class="baseband_frequency" id="ad9361_rx_rf_bandwidth" step="0.001" max="56">
+        MHz
+      </label>
+      <label>RX gain
+        <input type="number" class="gain" id="ad9361_rx_gain" step="1" min="-10" max="73">
+        dB
+      </label>
+      <label>RX AGC
+        <select id="ad9361_rx_gain_mode">
+	  <option>Manual</option>
+	  <option>Fast attack</option>
+          <option>Slow attack</option>
+          <option>Hybrid</option>
+        </select>
+      </label>
+      <label>Spectrum rate
+        <input type="number" id="spectrometer_output_sampling_frequency" step="any" min="0">
+        Hz
+      </label>
+      <button type="button" id="recorder_button"></button>
+      <button type="button" id="recording_properties_button">Recording</button>
+    </form>
+
+  </body>
+</html>
