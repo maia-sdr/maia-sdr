@@ -1,0 +1,42 @@
+name: 'maia-hdl'
+on: [push, pull_request]
+
+jobs:
+  python-formatting:
+    name: Check Python Formatting
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Install pycodestyle with pip
+      run: pip install pycodestyle
+    - name: Run pycodestyle
+      run: |
+        pycodestyle --exclude maia-hdl/adi-hdl/ maia-hdl/
+  python-tests:
+    name: Python Tests
+    runs-on: ubuntu-latest
+    container:
+      image: maiasdr/maia-sdr-devel:latest
+      options: --user root
+    steps:
+    - uses: actions/checkout@v3
+    - name: Run Python unittest
+      run: |
+        cd maia-hdl
+        python3 -m unittest
+  cocotb-tests:
+    name: cocotb Tests
+    runs-on: ubuntu-latest
+    container:
+      image: maiasdr/maia-sdr-devel:latest
+      options: --user root
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        submodules: true
+    - name: Run cocotb Makefile
+      run: |
+        cd maia-hdl/test_cocotb
+        export PATH=$PATH:/opt/oss-cad-suite/bin
+        make
+        test -z "$(grep --include=results.xml -r -e failure .)"

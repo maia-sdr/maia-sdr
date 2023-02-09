@@ -1,0 +1,26 @@
+name: 'maia-json'
+on: [push, pull_request]
+
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: maia-httpd/maia-json
+
+jobs:
+  rust:
+    name: Rust x86_64
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - name: Format
+      run: cargo fmt -- --check
+    - name: Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+    - name: Doc
+      run: cargo doc
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
+      run: cargo test --verbose
