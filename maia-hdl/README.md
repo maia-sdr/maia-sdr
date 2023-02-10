@@ -6,17 +6,15 @@ It is not necessary to install maia-hdl in order to generate the Vivado IP cores
 or projects, or to run the tests and simulations. These can be run as indicated
 below.
 
-It is possible to install maia-hdl as a Python package in order to be able to
-use it (with `import maia_hdl`) in other Python code and projects. The latest
-packaged version of maia-hdl can be installed with
-```
-pip install maia_hdl
-```
-
 The current checkout of this source tree can be installed with
 ```
 pip install .
 ```
+
+Currently it is not possible to install maia-hdl as a Python package from
+[PyPI](https://pypi.org/), because maia-hdl depends on
+[amaranth](https://github.com/amaranth-lang/amaranth), and the latest amaranth
+package in PyPI is too old.
 
 ## Building the Vivado IP cores and projects
 
