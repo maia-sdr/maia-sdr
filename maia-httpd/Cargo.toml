@@ -20,8 +20,8 @@ futures = "0.3"
 http = "0.2"
 hyper = "0.14"
 libc = "0.2"
-maia-json = { path = "maia-json" }
-maia-pac = { path = "maia-pac" }
+maia-json = { path = "maia-json", version = "0.1.0" }
+maia-pac = { path = "maia-pac", version = "0.1.0"  }
 nix = "0.26"
 page_size = "0.5"
 paste = "1.0"
