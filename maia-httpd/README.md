@@ -2,8 +2,8 @@
 
 [![Crates.io][crates-badge]][crates-url]
 
-[crates-badge]: https://img.shields.io/crates/v/maia-http.svg
-[crates-url]: https://crates.io/crates/maia-http
+[crates-badge]: https://img.shields.io/crates/v/maia-httpd.svg
+[crates-url]: https://crates.io/crates/maia-httpd
 
 maia-httpd is a Rust crate that implements the HTTP server used in [Maia
 SDR](https://maia-sdr.org/). This web server runs on the Zynq ARM CPU and
