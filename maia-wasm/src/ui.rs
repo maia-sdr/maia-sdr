@@ -19,7 +19,7 @@ use crate::waterfall::Waterfall;
 
 use active::IsElementActive;
 use input::{EnumInput, InputElement, NumberInput, TextInput};
-use patch::json_patch;
+use patch::{json_patch, PatchError};
 
 mod active;
 mod colormap;
@@ -239,21 +239,7 @@ impl Ui {
         let response = JsFuture::from(self.window.fetch_with_str(API_URL))
             .await?
             .dyn_into::<Response>()?;
-        Self::response_to_json(response).await
-    }
-
-    async fn response_to_json<T>(response: Response) -> Result<T, JsValue>
-    where
-        for<'a> T: serde::Deserialize<'a>,
-    {
-        let text = JsFuture::from(response.text()?).await?;
-        let json = serde_json::from_str(
-            &text
-                .as_string()
-                .ok_or("unable to convert fetch text to string")?,
-        )
-        .map_err(|_| format!("unable to parse {} JSON", std::any::type_name::<T>()))?;
-        Ok(json)
+        patch::response_to_json(&response).await
     }
 
     // The ad9361 is not implemented via impl_section! because it needs custom
@@ -263,16 +249,27 @@ impl Ui {
         &self,
         json: &maia_json::PatchAd9361,
     ) -> Result<(), JsValue> {
-        let json_output = self.patch_ad9361(json).await?;
-        self.update_ad9361_all_elements(&json_output)?;
-        if json.sampling_frequency.is_some() {
-            // The spectrometer needs to be updated also. To do this, we fake an
-            // onchange event for the spectrometer_rate input element.
-            self.elements
-                .spectrometer_output_sampling_frequency
-                .onchange()
-                .unwrap()
-                .call0(&JsValue::NULL)?;
+        match self.patch_ad9361(json).await {
+            Ok(json_output) => {
+                self.update_ad9361_all_elements(&json_output)?;
+                if json.sampling_frequency.is_some() {
+                    // The spectrometer needs to be updated also. To do this, we fake an
+                    // onchange event for the spectrometer_rate input element.
+                    self.elements
+                        .spectrometer_output_sampling_frequency
+                        .onchange()
+                        .unwrap()
+                        .call0(&JsValue::NULL)?;
+                }
+            }
+            Err(PatchError::RequestFailed(_)) => {
+                // The error has already been logged by patch_$name, so we do nothing
+                // and return Ok(()) so that the promise doesn't fail.
+            }
+            Err(PatchError::OtherError(err)) => {
+                // Unhandled error. Make the promise fail (eventually) with this error.
+                return Err(err);
+            }
         }
         Ok(())
     }
@@ -346,8 +343,17 @@ impl Ui {
         let ui = self.clone();
         future_to_promise(async move {
             let patch = patch;
-            let json = ui.patch_recorder(&patch).await?;
-            ui.update_recorder_button(&json);
+            match ui.patch_recorder(&patch).await {
+                Ok(json_output) => ui.update_recorder_button(&json_output),
+                Err(PatchError::RequestFailed(_)) => {
+                    // The error has already been logged by patch_$name, so we do nothing
+                    // and return Ok(()) so that the promise doesn't fail.
+                }
+                Err(PatchError::OtherError(err)) => {
+                    // Unhandled error. Make the promise fail (eventually) with this error.
+                    return Err(err);
+                }
+            }
             Ok(JsValue::NULL)
         })
         .into()
@@ -391,7 +397,7 @@ impl Ui {
             let patch = maia_json::PatchTime {
                 time: Some(milliseconds),
             };
-            self.patch_time(&patch).await?;
+            patch::ignore_request_failed(self.patch_time(&patch).await)?;
         }
         Ok(())
     }

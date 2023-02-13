@@ -74,12 +74,19 @@ macro_rules! set_on {
 macro_rules! impl_patch {
     ($name:ident, $patch_json:ty, $get_json:ty, $url:expr) => {
         paste::paste! {
-            async fn [<patch_ $name>](&self, json: &$patch_json) -> Result<$get_json, JsValue> {
+            async fn [<patch_ $name>](&self, json: &$patch_json) -> Result<$get_json, crate::ui::patch::PatchError> {
                 let request = json_patch($url, json)?;
                 let response = JsFuture::from(self.window.fetch_with_request(&request))
                     .await?
                     .dyn_into::<Response>()?;
-                Self::response_to_json(response).await
+                if !response.ok() {
+                    let status = response.status();
+                    let text = crate::ui::patch::response_to_string(&response).await?;
+                    web_sys::console::error_1(&format!("PATCH request failed with HTTP code {status}. \
+                                                        Server returned: {text}").into());
+                    return Err(crate::ui::patch::PatchError::RequestFailed(text));
+                }
+                Ok(crate::ui::patch::response_to_json(&response).await?)
             }
         }
     };
@@ -165,8 +172,17 @@ macro_rules! impl_section {
 
         paste::paste! {
             async fn [<patch_ $name _update_elements>](&self, json: &$patch_json) -> Result<(), JsValue> {
-                let json_output = self.[<patch_ $name>](json).await?;
-                self.[<update_ $name _all_elements>](&json_output);
+                match self.[<patch_ $name>](json).await {
+                    Ok(json_output) => self.[<update_ $name _all_elements>](&json_output),
+                    Err(crate::ui::patch::PatchError::RequestFailed(_)) => {
+                        // The error has already been logged by patch_$name, so we do nothing
+                        // and return Ok(()) so that the promise doesn't fail.
+                    }
+                    Err(crate::ui::patch::PatchError::OtherError(err)) => {
+                        // Unhandled error. Make the promise fail (eventually) with this error.
+                        return Err(err);
+                    }
+                }
                 Ok(())
             }
         }
