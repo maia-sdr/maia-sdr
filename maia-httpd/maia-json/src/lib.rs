@@ -53,20 +53,28 @@ pub struct Ad9361 {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PatchAd9361 {
     /// Sampling frequency in samples per second.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub sampling_frequency: Option<u32>,
     /// Receive RF bandwidth in Hz.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rx_rf_bandwidth: Option<u32>,
     /// Transmit RF bandwidth in Hz.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_rf_bandwidth: Option<u32>,
     /// Receive LO frequency in Hz.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rx_lo_frequency: Option<u64>,
     /// Transmit LO frequency in Hz.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_lo_frequency: Option<u64>,
     /// Receive gain in dB.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rx_gain: Option<f64>,
     /// Receive AGC mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub rx_gain_mode: Option<Ad9361GainMode>,
     /// Transmit gain in dB.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub tx_gain: Option<f64>,
 }
 
@@ -170,8 +178,10 @@ pub struct Spectrometer {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PatchSpectrometer {
     /// Output sampling frequency in samples per second.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub output_sampling_frequency: Option<f64>,
     /// Number of non-coherent integrations.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub number_integrations: Option<u32>,
 }
 
@@ -194,8 +204,10 @@ pub struct Recorder {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Hash)]
 pub struct PatchRecorder {
     /// Command to change the recorder state.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub state_change: Option<RecorderStateChange>,
     /// Recorder sampling mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<RecorderMode>,
 }
 
@@ -257,10 +269,13 @@ pub struct RecordingMetadata {
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Hash)]
 pub struct PatchRecordingMetadata {
     /// Recording file name.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub filename: Option<String>,
     /// Recording description.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
     /// Recording author.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
 }
 
@@ -291,6 +306,7 @@ pub struct PatchTime {
     /// Number of milliseconds since UNIX timestamp.
     ///
     /// This uses the same format as JavaScript `Date.now()`.
+    #[serde(skip_serializing_if = "Option::is_none")]
     pub time: Option<f64>,
 }
 
