@@ -112,7 +112,6 @@ impl Ui {
             ad9361_rx_lo_frequency,
             ad9361_sampling_frequency,
             ad9361_rx_rf_bandwidth,
-            ad9361_rx_gain,
             ad9361_rx_gain_mode,
             spectrometer_output_sampling_frequency,
             recording_metadata_filename,
@@ -120,6 +119,13 @@ impl Ui {
             recording_metadata_author,
             recorder_mode
         );
+
+        // This uses a custom onchange function that calls the macro-generated one.
+        self.elements.ad9361_rx_gain.set_onchange(Some(
+            self.ad9361_rx_gain_onchange_manual()
+                .into_js_value()
+                .unchecked_ref(),
+        ));
 
         set_on!(click, self, recorder_button, recording_properties_button);
 
@@ -326,6 +332,28 @@ impl Ui {
         rx_gain,
         rx_gain_mode
     );
+
+    // Custom onchange function for the RX gain. This avoids trying to change
+    // the gain when the AGC is not in manual mode, which would give an HTTP 500
+    // error in the PATCH request.
+    fn ad9361_rx_gain_onchange_manual(&self) -> Closure<dyn Fn() -> JsValue> {
+        let closure = self.ad9361_rx_gain_onchange();
+        let ui = self.clone();
+        Closure::new(move || {
+            if !matches!(
+                ui.elements.ad9361_rx_gain_mode.get(),
+                Some(maia_json::Ad9361GainMode::Manual)
+            ) {
+                return JsValue::NULL;
+            }
+            // Run macro-generated closure to parse the entry value and make a FETCH request
+            closure
+                .as_ref()
+                .unchecked_ref::<js_sys::Function>()
+                .call0(&JsValue::NULL)
+                .unwrap()
+        })
+    }
 
     fn update_recorder_button(&self, json: &maia_json::Recorder) {
         let text = match json.state {
