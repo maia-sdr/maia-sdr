@@ -395,10 +395,4 @@ impl Ui {
         }
         Ok(())
     }
-
-    // fn update_server_preferences(&self, json: &maia_json::Api) -> Result<(), JsValue> {
-    //     let mut p = self.preferences.borrow_mut();
-    //     p.update_ad9361_rx_lo_frequency(json.ad9361.rx_lo_frequency)?;
-    //     p.update_ad9361_sampling_frequency(json.ad9361.
-    // }
 }
