@@ -130,11 +130,16 @@ impl WaterfallInteraction {
     }
 
     fn apply_dilation(
+        canvas: &HtmlCanvasElement,
         render_engine: &RenderEngine,
         waterfall: &mut Waterfall,
         dilation: f32,
         center: i32,
     ) {
+        // 'center' uses client coordinates so we need to shift it according
+        // to the client coordinates for the canvas origin.
+        let center = center - canvas.get_bounding_client_rect().x().round() as i32;
+
         let zoom = waterfall.get_zoom();
         let new_zoom = Self::clamp_zoom(dilation * zoom);
         if new_zoom == zoom {
@@ -152,11 +157,13 @@ impl WaterfallInteraction {
     fn onwheel(&self) -> Closure<dyn Fn(WheelEvent)> {
         let render_engine = Rc::clone(&self.render_engine);
         let waterfall = Rc::clone(&self.waterfall);
+        let canvas = Rc::clone(&self.canvas);
         Closure::new(move |event: WheelEvent| {
             event.prevent_default();
             let dilation = (-1e-3 * event.delta_y() as f32).exp();
             let center = event.client_x();
             Self::apply_dilation(
+                &canvas,
                 &render_engine.borrow(),
                 &mut waterfall.borrow_mut(),
                 dilation,
@@ -227,6 +234,7 @@ impl WaterfallInteraction {
                 }
             }
             PointerGesture::Pinch { center, dilation } => Self::apply_dilation(
+                &self.canvas,
                 &self.render_engine.borrow(),
                 &mut self.waterfall.borrow_mut(),
                 dilation.0,
