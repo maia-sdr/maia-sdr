@@ -11,7 +11,7 @@ use std::cell::RefCell;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
-use web_sys::{HtmlCanvasElement, PointerEvent, WheelEvent};
+use web_sys::{HtmlCanvasElement, PointerEvent, WheelEvent, Window};
 
 /// Waterfall interaction controller.
 ///
@@ -23,11 +23,12 @@ use web_sys::{HtmlCanvasElement, PointerEvent, WheelEvent};
 ///   on the waterfall.
 #[derive(Clone)]
 pub struct WaterfallInteraction {
-    render_engine: Rc<RefCell<RenderEngine>>,
+    window: Rc<Window>,
     canvas: Rc<HtmlCanvasElement>,
-    pointer_tracker: Rc<RefCell<PointerTracker>>,
+    render_engine: Rc<RefCell<RenderEngine>>,
     waterfall: Rc<RefCell<Waterfall>>,
-    ui: Ui,
+    pointer_tracker: Rc<RefCell<PointerTracker>>,
+    ui: Option<Ui>,
     center_freq_overflow: Rc<RefCell<f32>>,
 }
 
@@ -36,35 +37,48 @@ impl WaterfallInteraction {
     ///
     /// The controller needs access to the [`RenderEngine`], in order to convert
     /// from pixels to units, to the [`Waterfall`] and its associated canvas
-    /// element, and to the [`Ui`] (which is used when the RX frequency needs to
-    /// be updated because of waterfall dragging).
-    ///
-    /// After this function returns, it is necessary to call
-    /// [`WaterfallInteraction::set_callbacks`] to create and register the
-    /// required event callbacks.
+    /// element.
     pub fn new(
-        render_engine: Rc<RefCell<RenderEngine>>,
+        window: Rc<Window>,
         canvas: Rc<HtmlCanvasElement>,
-        ui: Ui,
+        render_engine: Rc<RefCell<RenderEngine>>,
         waterfall: Rc<RefCell<Waterfall>>,
-    ) -> WaterfallInteraction {
-        WaterfallInteraction {
-            render_engine,
+    ) -> Result<WaterfallInteraction, JsValue> {
+        // Set the canvas default cursor to crosshair. This is overridden by
+        // some of the methods below.
+        canvas.style().set_property("cursor", "crosshair")?;
+
+        let interaction = WaterfallInteraction {
+            window,
             canvas,
-            pointer_tracker: Rc::new(RefCell::new(PointerTracker::new())),
+            render_engine,
             waterfall,
-            ui,
+            pointer_tracker: Rc::new(RefCell::new(PointerTracker::new())),
+            ui: None,
             center_freq_overflow: Rc::new(RefCell::new(0.0)),
-        }
+        };
+        interaction.set_callbacks();
+        Ok(interaction)
     }
 
-    /// Sets the callbacks required by the interaction controller.
+    /// Sets the [`Ui`] object associated to the waterfall.
     ///
-    /// This registers callbacks for the on wheel and on pointer
-    /// up/down/cancel/leave/move events of the waterfall canvas.
-    pub fn set_callbacks(&self) {
+    /// This object is used to update the RX frequency when the waterfall is
+    /// dragged much futher than its edge. If this function is not called,
+    /// updating the frequency when the waterfall is dragged will not be
+    /// supported (this is for the intended use case in which a `Ui` object is
+    /// not available).
+    pub fn set_ui(&mut self, ui: Ui) {
+        self.ui = Some(ui);
+    }
+
+    fn set_callbacks(&self) {
         // We leak all the closures produced by self to prevent them from being
         // dropped immediately.
+        self.resize_canvas()();
+        self.window
+            .set_onresize(Some(self.onresize().into_js_value().unchecked_ref()));
+
         self.canvas
             .set_onwheel(Some(self.onwheel().into_js_value().unchecked_ref()));
 
@@ -82,6 +96,20 @@ impl WaterfallInteraction {
 
         self.canvas
             .set_onpointermove(Some(self.onpointermove().into_js_value().unchecked_ref()));
+    }
+
+    fn resize_canvas(&self) -> impl Fn() {
+        let render_engine = Rc::clone(&self.render_engine);
+        let waterfall = Rc::clone(&self.waterfall);
+        move || {
+            let mut engine = render_engine.borrow_mut();
+            engine.resize_canvas().unwrap();
+            waterfall.borrow_mut().resize_canvas(&mut engine).unwrap();
+        }
+    }
+
+    fn onresize(&self) -> Closure<dyn Fn()> {
+        Closure::new(self.resize_canvas())
     }
 
     fn clamp_zoom(zoom: f32) -> f32 {
@@ -186,15 +214,16 @@ impl WaterfallInteraction {
                 let mut overflow = self.center_freq_overflow.borrow_mut();
                 *overflow += freq - clamped;
                 let shift_threshold = 0.25;
-                if overflow.abs() >= shift_threshold {
-                    // Change receive frequency
-                    let shift = shift_threshold.copysign(*overflow);
-                    *overflow -= shift;
-                    let (fc, fs) = waterfall.get_freq_samprate();
-                    let new_fc = fc + 0.5 * f64::from(shift) * fs;
-                    self.ui.set_rx_lo_frequency(new_fc as u64)?;
-                } else {
-                    waterfall.set_center_frequency(clamped);
+                match self.ui.as_ref() {
+                    Some(ui) if overflow.abs() >= shift_threshold => {
+                        // Change receive frequency
+                        let shift = shift_threshold.copysign(*overflow);
+                        *overflow -= shift;
+                        let (fc, fs) = waterfall.get_freq_samprate();
+                        let new_fc = fc + 0.5 * f64::from(shift) * fs;
+                        ui.set_rx_lo_frequency(new_fc as u64)?;
+                    }
+                    _ => waterfall.set_center_frequency(clamped),
                 }
             }
             PointerGesture::Pinch { center, dilation } => Self::apply_dilation(

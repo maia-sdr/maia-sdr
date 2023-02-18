@@ -98,9 +98,6 @@ impl Ui {
     }
 
     fn set_callbacks(&self) -> Result<(), JsValue> {
-        self.resize_canvas()();
-        self.window
-            .set_onresize(Some(self.onresize().into_js_value().unchecked_ref()));
         self.set_api_get_periodic(1000)?;
 
         set_on!(
@@ -180,20 +177,6 @@ impl Ui {
         self.window
             .set_interval_with_callback_and_timeout_and_arguments_0(handler, interval_ms)?;
         Ok(())
-    }
-
-    fn resize_canvas(&self) -> impl Fn() {
-        let render_engine = Rc::clone(&self.render_engine);
-        let waterfall = Rc::clone(&self.waterfall);
-        move || {
-            let mut engine = render_engine.borrow_mut();
-            engine.resize_canvas().unwrap();
-            waterfall.borrow_mut().resize_canvas(&mut engine).unwrap();
-        }
-    }
-
-    fn onresize(&self) -> Closure<dyn Fn()> {
-        Closure::new(self.resize_canvas())
     }
 
     fn colormap_select_onchange(&self) -> Closure<dyn Fn()> {
