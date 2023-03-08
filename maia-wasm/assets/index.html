@@ -36,51 +36,53 @@
       </form>
     </dialog>
 
-    <canvas id="canvas"></canvas>
+    <div class="main_screen">
+      <canvas id="canvas"></canvas>
 
-    <form class="ui">
-      <label>Colormap
-        <select id="colormap_select">
-	  <option>Turbo</option>
-	  <option>Viridis</option>
-        </select>
-      </label>
-      <fieldset class="waterfall_levels">
-        <label for="waterfall_min">Waterfall min</label>/<label for="waterfall_max">max</label>
-        <input type="number" id="waterfall_min" value="35" step="1" min="0">
-        <input type="number" id="waterfall_max" value="85" step="1" min="0">
-      </fieldset>
-      <label>RX freq
-        <input type="number" class="rf_frequency" id="ad9361_rx_lo_frequency" step="0.001" min="70" max="6000">
-        MHz
-      </label>
-      <label>Sampling freq
-        <input type="number" class="baseband_frequency" id="ad9361_sampling_frequency" step="0.001" max="61.44">
-        Msps
-      </label>
-      <label>RX bandwidth
-        <input type="number" class="baseband_frequency" id="ad9361_rx_rf_bandwidth" step="0.001" max="56">
-        MHz
-      </label>
-      <label>RX gain
-        <input type="number" class="gain" id="ad9361_rx_gain" step="1" min="-10" max="73">
-        dB
-      </label>
-      <label>RX AGC
-        <select id="ad9361_rx_gain_mode">
-	  <option>Manual</option>
-	  <option>Fast attack</option>
-          <option>Slow attack</option>
-          <option>Hybrid</option>
-        </select>
-      </label>
-      <label>Spectrum rate
-        <input type="number" id="spectrometer_output_sampling_frequency" step="any" min="0">
-        Hz
-      </label>
-      <button type="button" id="recorder_button"></button>
-      <button type="button" id="recording_properties_button">Recording</button>
-    </form>
+      <form class="ui">
+        <label>Colormap
+          <select id="colormap_select">
+	    <option>Turbo</option>
+	    <option>Viridis</option>
+          </select>
+        </label>
+        <fieldset class="waterfall_levels">
+          <label for="waterfall_min">Waterfall min</label>/<label for="waterfall_max">max</label>
+          <input type="number" id="waterfall_min" value="35" step="1" min="0">
+          <input type="number" id="waterfall_max" value="85" step="1" min="0">
+        </fieldset>
+        <label>RX freq
+          <input type="number" class="rf_frequency" id="ad9361_rx_lo_frequency" step="0.001" min="70" max="6000">
+          MHz
+        </label>
+        <label>Sampling freq
+          <input type="number" class="baseband_frequency" id="ad9361_sampling_frequency" step="0.001" max="61.44">
+          Msps
+        </label>
+        <label>RX bandwidth
+          <input type="number" class="baseband_frequency" id="ad9361_rx_rf_bandwidth" step="0.001" max="56">
+          MHz
+        </label>
+        <label>RX gain
+          <input type="number" class="gain" id="ad9361_rx_gain" step="1" min="-10" max="73">
+          dB
+        </label>
+        <label>RX AGC
+          <select id="ad9361_rx_gain_mode">
+	    <option>Manual</option>
+	    <option>Fast attack</option>
+            <option>Slow attack</option>
+            <option>Hybrid</option>
+          </select>
+        </label>
+        <label>Spectrum rate
+          <input type="number" id="spectrometer_output_sampling_frequency" step="any" min="0">
+          Hz
+        </label>
+        <button type="button" id="recorder_button"></button>
+        <button type="button" id="recording_properties_button">Recording</button>
+      </form>
+    </div>
 
   </body>
 </html>
