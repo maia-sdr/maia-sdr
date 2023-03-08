@@ -14,7 +14,7 @@ categories = ["hardware-support", "science", "web-programming::http-server", "we
 anyhow = { version = "1.0", features = ["std"] } 
 axum = { version = "0.6", features = ["default", "ws"] }
 bytes = "1.2"
-chrono = "0.4"
+chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4.0", features = ["derive"] }
 futures = "0.3"
 http = "0.2"
