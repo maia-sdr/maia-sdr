@@ -28,7 +28,7 @@ pub struct WaterfallInteraction {
     render_engine: Rc<RefCell<RenderEngine>>,
     waterfall: Rc<RefCell<Waterfall>>,
     pointer_tracker: Rc<RefCell<PointerTracker>>,
-    ui: Option<Ui>,
+    ui: Rc<RefCell<Option<Ui>>>,
     center_freq_overflow: Rc<RefCell<f32>>,
 }
 
@@ -54,7 +54,7 @@ impl WaterfallInteraction {
             render_engine,
             waterfall,
             pointer_tracker: Rc::new(RefCell::new(PointerTracker::new())),
-            ui: None,
+            ui: Rc::new(RefCell::new(None)),
             center_freq_overflow: Rc::new(RefCell::new(0.0)),
         };
         interaction.set_callbacks();
@@ -69,7 +69,7 @@ impl WaterfallInteraction {
     /// supported (this is for the intended use case in which a `Ui` object is
     /// not available).
     pub fn set_ui(&mut self, ui: Ui) {
-        self.ui = Some(ui);
+        self.ui.borrow_mut().replace(ui);
     }
 
     fn set_callbacks(&self) {
@@ -221,7 +221,7 @@ impl WaterfallInteraction {
                 let mut overflow = self.center_freq_overflow.borrow_mut();
                 *overflow += freq - clamped;
                 let shift_threshold = 0.25;
-                match self.ui.as_ref() {
+                match self.ui.borrow().as_ref() {
                     Some(ui) if overflow.abs() >= shift_threshold => {
                         // Change receive frequency
                         let shift = shift_threshold.copysign(*overflow);
