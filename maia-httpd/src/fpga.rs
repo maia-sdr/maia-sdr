@@ -382,7 +382,6 @@ impl Dma {
         let end = (last_written + 1) & self.num_buffers_mask;
 
         (start..)
-            .into_iter()
             .map(|n| n & self.num_buffers_mask)
             .take_while(move |&n| n != end)
             .map(|n| {
