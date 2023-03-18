@@ -468,10 +468,7 @@ impl Waterfall {
 
         let start = ((self.center_freq - 0.5 * self.samp_rate) / step).floor() as i32 - 1;
         let stop = ((self.center_freq + 0.5 * self.samp_rate) / step).ceil() as i32 + 1;
-        let mut freqs = (start..=stop)
-            .into_iter()
-            .map(|k| k as f64 * step)
-            .collect::<Vec<_>>();
+        let mut freqs = (start..=stop).map(|k| k as f64 * step).collect::<Vec<_>>();
         let mut nfreqs = Vec::with_capacity(max_depth + 1);
         nfreqs.push(freqs.len());
         let mut freq_radixes = Vec::with_capacity(max_depth);
@@ -530,7 +527,7 @@ impl Waterfall {
             })
             .collect::<Vec<u16>>();
 
-        let indices_ticks = (0..freqs.len() as u16).into_iter().collect::<Vec<u16>>();
+        let indices_ticks = (0..freqs.len() as u16).collect::<Vec<u16>>();
 
         let texture_texts = freqs_labels
             .iter()
