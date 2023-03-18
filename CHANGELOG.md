@@ -17,6 +17,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2023-03-18
+
 ### Changed
 
 - Bumped maia-httpd to v0.1.1. Only a minor security bugfix.
