@@ -32,3 +32,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Initial release of maia-sdr: support for the ADALM Pluto including a web
   interface with real-time waterfall display and IQ recording in SigMF format to
   the Pluto RAM.
+
+[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.1.0...maia-sdr-v0.2.0
+[0.1.0]: https://github.com/maia-sdr/maia-sdr/releases/tag/v0.1.0
