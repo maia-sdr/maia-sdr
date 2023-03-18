@@ -111,25 +111,20 @@ impl TextureParameter {
 /// Magnification filter.
 ///
 /// This enum lists the magnification filters supported by WebGL2.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
 #[repr(u32)]
 pub enum TextureMagFilter {
     /// Linear filtering.
+    #[default]
     Linear = WebGl2RenderingContext::LINEAR,
     /// Nearest-neighbor filtering.
     Nearest = WebGl2RenderingContext::NEAREST,
 }
 
-impl Default for TextureMagFilter {
-    fn default() -> TextureMagFilter {
-        TextureMagFilter::Linear
-    }
-}
-
 /// Minification filter.
 ///
 /// This enum lists the minification filters supported by WebGL2.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
 #[repr(u32)]
 pub enum TextureMinFilter {
     /// Linear filtering.
@@ -141,35 +136,25 @@ pub enum TextureMinFilter {
     /// Linear filtering using the nearest mipmap.
     LinearMipmapNearest = WebGl2RenderingContext::LINEAR_MIPMAP_NEAREST,
     /// Nearest-neighbor filtering using linear interpolation between mipmaps.
+    #[default]
     NearestMipmapLinear = WebGl2RenderingContext::NEAREST_MIPMAP_LINEAR,
     /// Linear filtering using linear interpolation between mipmaps.
     LinearMipmapLinear = WebGl2RenderingContext::LINEAR_MIPMAP_LINEAR,
 }
 
-impl Default for TextureMinFilter {
-    fn default() -> TextureMinFilter {
-        TextureMinFilter::NearestMipmapLinear
-    }
-}
-
 /// Texture wrapping.
 ///
 /// This enum lists the texture wrapping settings supported by WebGL2.
-#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash)]
+#[derive(Debug, Copy, Clone, Eq, PartialEq, Hash, Default)]
 #[repr(u32)]
 pub enum TextureWrap {
     /// Repeat.
+    #[default]
     Repeat = WebGl2RenderingContext::REPEAT,
     /// Clamp to edge.
     ClampToEdge = WebGl2RenderingContext::CLAMP_TO_EDGE,
     /// Mirrored repeat.
     MirroredRepeat = WebGl2RenderingContext::MIRRORED_REPEAT,
-}
-
-impl Default for TextureWrap {
-    fn default() -> TextureWrap {
-        TextureWrap::Repeat
-    }
 }
 
 /// WebGL2 texture internal format.
