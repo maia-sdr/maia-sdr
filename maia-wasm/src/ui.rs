@@ -274,6 +274,7 @@ impl Ui {
             rx_gain,
             rx_gain_mode
         );
+        self.update_rx_gain_disabled_status(json);
         self.update_waterfall_ad9361(json)
     }
 
@@ -288,7 +289,18 @@ impl Ui {
             rx_gain,
             rx_gain_mode
         );
+        self.update_rx_gain_disabled_status(json);
         self.update_waterfall_ad9361(json)
+    }
+
+    fn update_rx_gain_disabled_status(&self, json: &maia_json::Ad9361) {
+        let disabled = match json.rx_gain_mode {
+            maia_json::Ad9361GainMode::Manual => false,
+            maia_json::Ad9361GainMode::FastAttack => true,
+            maia_json::Ad9361GainMode::SlowAttack => true,
+            maia_json::Ad9361GainMode::Hybrid => true,
+        };
+        self.elements.ad9361_rx_gain.set_disabled(disabled);
     }
 
     fn update_waterfall_ad9361(&self, json: &maia_json::Ad9361) -> Result<(), JsValue> {
