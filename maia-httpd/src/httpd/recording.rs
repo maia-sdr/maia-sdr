@@ -69,6 +69,7 @@ struct RecordingMeta {
     sigmf_meta: sigmf::Metadata,
     mode: RecorderMode,
     filename: String,
+    prepend_timestamp: bool,
     recorder_state: maia_json::RecorderState,
 }
 
@@ -88,6 +89,7 @@ impl RecordingMeta {
             sigmf_meta,
             mode,
             filename,
+            prepend_timestamp: false,
             recorder_state,
         })
     }
@@ -98,6 +100,9 @@ impl RecordingMeta {
         ip_core: &std::sync::Mutex<IpCore>,
     ) -> Result<()> {
         self.sigmf_meta.set_datetime_now();
+        if self.prepend_timestamp {
+            self.prepend_timestamp_to_filename();
+        }
         self.mode = ip_core.lock().unwrap().recorder_mode();
         self.sigmf_meta.set_datatype(self.mode.into());
         self.sigmf_meta
@@ -119,6 +124,7 @@ impl RecordingMeta {
         maia_json::Recorder {
             state: self.recorder_state,
             mode: ip_core.lock().unwrap().recorder_mode(),
+            prepend_timestamp: self.prepend_timestamp,
         }
     }
 
@@ -132,6 +138,42 @@ impl RecordingMeta {
         if let Some(author) = patch.author {
             self.sigmf_meta.set_author(&author);
         }
+    }
+
+    fn prepend_timestamp_to_filename(&mut self) {
+        // The sigmf metadata has already been set with the timestamp
+        // corresponding to the recording start.
+        let datetime = self.sigmf_meta.datetime();
+        // Remove previous timestamp if there is already one
+        let filename = if Self::begins_with_timestamp(&self.filename) {
+            &self.filename[Self::TIMESTAMP_LEN..]
+        } else {
+            &self.filename
+        };
+        self.filename = format!("{}_{}", datetime.format("%Y-%m-%d-%H-%M-%S"), filename);
+    }
+
+    // Timestamp format XXXX-XX-XX-XX-XX-XX_
+    const TIMESTAMP_LEN: usize = 20;
+
+    fn begins_with_timestamp(s: &str) -> bool {
+        if s.len() < Self::TIMESTAMP_LEN {
+            return false;
+        }
+        for (j, c) in s[..Self::TIMESTAMP_LEN].chars().enumerate() {
+            if j == 19 {
+                if c != '_' {
+                    return false;
+                }
+            } else if j == 4 || j == 7 || j == 10 || j == 13 || j == 16 {
+                if c != '-' {
+                    return false;
+                }
+            } else if !c.is_ascii_digit() {
+                return false;
+            }
+        }
+        true
     }
 }
 
@@ -166,6 +208,9 @@ async fn recorder_patch(
         recorder.ip_core.lock().unwrap().set_recorder_mode(mode);
     }
     let mut metadata = recorder.metadata.lock().await;
+    if let Some(prepend) = patch.prepend_timestamp {
+        metadata.prepend_timestamp = prepend;
+    }
     match (patch.state_change, metadata.recorder_state) {
         (Some(maia_json::RecorderStateChange::Start), maia_json::RecorderState::Stopped) => {
             metadata.recorder_state = maia_json::RecorderState::Running;

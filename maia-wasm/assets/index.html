@@ -21,7 +21,11 @@
     <dialog class="ui" id="recording_dialog">
       <form method="dialog" id="recording_form">
         <label for="recording_metadata_file">Filename</label>
-        <input type="text" id="recording_metadata_filename">
+        <div class="recording_filename_properties">
+          <input type="text" id="recording_metadata_filename">
+          <label for="recorder_prepend_timestamp">Add date/time</label>
+          <input type="checkbox" id="recorder_prepend_timestamp">
+        </div>
         <label for="recording_metadata_description">Description</label>
         <input type="text" id="recording_metadata_description">
         <label for="recording_metadata_author">Author</label>

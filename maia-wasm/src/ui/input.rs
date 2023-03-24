@@ -184,3 +184,34 @@ impl<E: std::str::FromStr + std::string::ToString> InputElement<HtmlSelectElemen
         self.element.set_value(&value.to_string());
     }
 }
+
+#[derive(Clone)]
+pub struct CheckboxInput {
+    element: Rc<HtmlInputElement>,
+}
+
+impl From<Rc<HtmlInputElement>> for CheckboxInput {
+    fn from(element: Rc<HtmlInputElement>) -> CheckboxInput {
+        CheckboxInput { element }
+    }
+}
+
+impl Deref for CheckboxInput {
+    type Target = HtmlInputElement;
+
+    fn deref(&self) -> &HtmlInputElement {
+        &self.element
+    }
+}
+
+impl InputElement<HtmlInputElement> for CheckboxInput {
+    type T = bool;
+
+    fn get(&self) -> Option<bool> {
+        Some(self.element.checked())
+    }
+
+    fn set(&self, &value: &bool) {
+        self.element.set_checked(value)
+    }
+}

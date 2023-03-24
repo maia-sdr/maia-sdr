@@ -97,7 +97,12 @@ macro_rules! set_values_if_inactive {
         let mut preferences = $self.preferences.borrow_mut();
         paste::paste!{
             $(
-                if !$self.document.is_element_active(stringify!([<$section _ $element>])) {
+                // A checkbox HtmlInputElement is always considered inactive,
+                // because the user interaction with it is limited to clicking
+                // (rather than typing). Therefore, we update it regardless of
+                // whether it has focus.
+                if !$self.document.is_element_active(stringify!([<$section _ $element>]))
+                || $self.elements.[<$section _ $element>].type_() == "checkbox" {
                     $self.elements.[<$section _ $element>].set(&$source.$element);
                 }
                 if let Err(e) = preferences.[<update_ $section _ $element>](&$source.$element) {

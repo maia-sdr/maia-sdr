@@ -195,6 +195,8 @@ pub struct Recorder {
     pub state: RecorderState,
     /// Recoder sampling mode.
     pub mode: RecorderMode,
+    /// Automatically prepend timestamp to file name.
+    pub prepend_timestamp: bool,
 }
 
 /// IQ recorder PATCH JSON schema.
@@ -209,6 +211,9 @@ pub struct PatchRecorder {
     /// Recorder sampling mode.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<RecorderMode>,
+    /// Automatically prepend timestamp to file name.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub prepend_timestamp: Option<bool>,
 }
 
 /// Command to change the IQ recorder state.
