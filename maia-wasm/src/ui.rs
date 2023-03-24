@@ -73,6 +73,7 @@ ui_elements! {
     recording_metadata_description: HtmlInputElement => TextInput,
     recording_metadata_author: HtmlInputElement => TextInput,
     recorder_mode: HtmlSelectElement => EnumInput<maia_json::RecorderMode>,
+    recorder_maximum_duration: HtmlInputElement => NumberInput<f64>,
 }
 
 impl Ui {
@@ -116,7 +117,8 @@ impl Ui {
             recorder_prepend_timestamp,
             recording_metadata_description,
             recording_metadata_author,
-            recorder_mode
+            recorder_mode,
+            recorder_maximum_duration
         );
 
         // This uses a custom onchange function that calls the macro-generated one.
@@ -166,7 +168,8 @@ impl Ui {
         maia_json::PatchRecorder,
         RECORDER_URL,
         prepend_timestamp,
-        mode
+        mode,
+        maximum_duration
     );
 
     fn set_api_get_periodic(&self, interval_ms: i32) -> Result<(), JsValue> {

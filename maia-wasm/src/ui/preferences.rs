@@ -73,6 +73,7 @@ impl_preference_data! {
     recording_metadata_description: String = "".to_string(),
     recording_metadata_author: String = "".to_string(),
     recorder_mode: maia_json::RecorderMode = maia_json::RecorderMode::IQ12bit,
+    recorder_maximum_duration: f64 = 0.0,
 }
 
 impl Preferences {

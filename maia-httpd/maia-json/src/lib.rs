@@ -189,7 +189,7 @@ pub struct PatchSpectrometer {
 ///
 /// This JSON schema corresponds to GET requests on `/api/recorder`. It contains
 /// the settings of the IQ recorder.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Recorder {
     /// Current recorder state.
     pub state: RecorderState,
@@ -197,13 +197,15 @@ pub struct Recorder {
     pub mode: RecorderMode,
     /// Automatically prepend timestamp to file name.
     pub prepend_timestamp: bool,
+    /// Maximum recording duration (in seconds).
+    pub maximum_duration: f64,
 }
 
 /// IQ recorder PATCH JSON schema.
 ///
 /// This JSON schema corresponds to PATCH requests on `/api/recorder`. It is
 /// used to modify the settings of the IQ recorder.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PatchRecorder {
     /// Command to change the recorder state.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -214,6 +216,9 @@ pub struct PatchRecorder {
     /// Automatically prepend timestamp to file name.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub prepend_timestamp: Option<bool>,
+    /// Maximum recording duration (in seconds).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub maximum_duration: Option<f64>,
 }
 
 /// Command to change the IQ recorder state.
