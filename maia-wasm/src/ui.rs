@@ -18,7 +18,7 @@ use crate::render::RenderEngine;
 use crate::waterfall::Waterfall;
 
 use active::IsElementActive;
-use input::{EnumInput, InputElement, NumberInput, TextInput};
+use input::{CheckboxInput, EnumInput, InputElement, NumberInput, TextInput};
 use patch::{json_patch, PatchError};
 
 mod active;
@@ -69,6 +69,7 @@ ui_elements! {
     spectrometer_output_sampling_frequency: HtmlInputElement
         => NumberInput<f64, input::IntegerPresentation>,
     recording_metadata_filename: HtmlInputElement => TextInput,
+    recorder_prepend_timestamp: HtmlInputElement => CheckboxInput,
     recording_metadata_description: HtmlInputElement => TextInput,
     recording_metadata_author: HtmlInputElement => TextInput,
     recorder_mode: HtmlSelectElement => EnumInput<maia_json::RecorderMode>,
@@ -112,6 +113,7 @@ impl Ui {
             ad9361_rx_gain_mode,
             spectrometer_output_sampling_frequency,
             recording_metadata_filename,
+            recorder_prepend_timestamp,
             recording_metadata_description,
             recording_metadata_author,
             recorder_mode
@@ -163,6 +165,7 @@ impl Ui {
         maia_json::Recorder,
         maia_json::PatchRecorder,
         RECORDER_URL,
+        prepend_timestamp,
         mode
     );
 

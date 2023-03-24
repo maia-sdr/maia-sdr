@@ -238,8 +238,19 @@ input.gain {
 }
 
 #recording_form input,
-#recording_form select {
+#recording_form select,
+#recording_form .recording_filename_properties {
     grid-column: 2/5;
+}
+
+.recording_filename_properties {
+    display: flex;
+    align-items: center;
+    column-gap: 10px;
+}
+
+.recording_filename_properties input:first-child {
+    flex: 1;
 }
 
 #download_recording {
