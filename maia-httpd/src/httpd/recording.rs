@@ -12,9 +12,10 @@ use std::os::unix::io::AsRawFd;
 use std::pin::Pin;
 use std::sync::Arc;
 use std::task::{Context, Poll};
+use std::time::Duration;
 use tokio::fs;
 use tokio::io::DuplexStream;
-use tokio_util::io::ReaderStream;
+use tokio_util::{io::ReaderStream, sync::CancellationToken};
 
 #[derive(Debug, Clone)]
 pub struct Recorder {
@@ -59,17 +60,25 @@ impl FinishWaiter {
         loop {
             self.waiter.wait().await;
             tracing::info!("recorder finished");
-            self.metadata.lock().await.recorder_state = maia_json::RecorderState::Stopped;
+            let mut metadata = self.metadata.lock().await;
+            // Cancel the stop timer (perhaps it has already expired, but this
+            // doesn't matter).
+            if let Some(token) = metadata.stop_timer_cancellation.take() {
+                token.cancel()
+            }
+            metadata.recorder_state = maia_json::RecorderState::Stopped;
         }
     }
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone)]
 struct RecordingMeta {
     sigmf_meta: sigmf::Metadata,
     mode: RecorderMode,
     filename: String,
     prepend_timestamp: bool,
+    maximum_duration: Option<Duration>,
+    stop_timer_cancellation: Option<CancellationToken>,
     recorder_state: maia_json::RecorderState,
 }
 
@@ -90,6 +99,8 @@ impl RecordingMeta {
             mode,
             filename,
             prepend_timestamp: false,
+            maximum_duration: None,
+            stop_timer_cancellation: None,
             recorder_state,
         })
     }
@@ -97,9 +108,29 @@ impl RecordingMeta {
     async fn update_for_new_recording(
         &mut self,
         ad9361: &tokio::sync::Mutex<Ad9361>,
-        ip_core: &std::sync::Mutex<IpCore>,
+        ip_core: &Arc<std::sync::Mutex<IpCore>>,
     ) -> Result<()> {
         self.sigmf_meta.set_datetime_now();
+
+        if let Some(duration) = self.maximum_duration {
+            // set up timer task to automatically stop the recording
+            let token = CancellationToken::new();
+            // stop_timer_cancellation should always be None in the Stopped
+            // state (which is when this function can be called).
+            assert!(self.stop_timer_cancellation.is_none());
+            self.stop_timer_cancellation = Some(token.clone());
+            let ip_core_ = Arc::clone(ip_core);
+            tokio::spawn(async move {
+                tokio::select! {
+                    _ = token.cancelled() => return,
+                    // add 0.1 s duration to the time to sleep in case the ADC
+                    // sample clock is slower than our clock
+                    _ = tokio::time::sleep(duration + Duration::from_millis(100)) => {}
+                };
+                ip_core_.lock().unwrap().recorder_stop()
+            });
+        }
+
         if self.prepend_timestamp {
             self.prepend_timestamp_to_filename();
         }
@@ -125,6 +156,10 @@ impl RecordingMeta {
             state: self.recorder_state,
             mode: ip_core.lock().unwrap().recorder_mode(),
             prepend_timestamp: self.prepend_timestamp,
+            maximum_duration: self
+                .maximum_duration
+                .map(|d| d.as_secs_f64())
+                .unwrap_or(0.0),
         }
     }
 
@@ -211,6 +246,16 @@ async fn recorder_patch(
     if let Some(prepend) = patch.prepend_timestamp {
         metadata.prepend_timestamp = prepend;
     }
+    if let Some(duration) = patch.maximum_duration {
+        if duration <= 0.0 {
+            // Unlimited duration
+            metadata.maximum_duration = None;
+        } else {
+            // Use try_from_secs_f64 to avoid panics when duration overflows
+            // Duration or is infinite.
+            metadata.maximum_duration = Duration::try_from_secs_f64(duration).ok();
+        }
+    }
     match (patch.state_change, metadata.recorder_state) {
         (Some(maia_json::RecorderStateChange::Start), maia_json::RecorderState::Stopped) => {
             metadata.recorder_state = maia_json::RecorderState::Running;
@@ -261,8 +306,12 @@ pub async fn get_recording(
     State(recorder): State<Recorder>,
 ) -> Result<(HeaderMap, StreamBody<SigmfStream>), JsonError> {
     let metadata = recorder.metadata.lock().await.clone();
+    let max_samples = metadata.maximum_duration.map(|duration| {
+        let samp_rate = metadata.sigmf_meta.sample_rate();
+        (duration.as_secs_f64() * samp_rate).round() as usize
+    });
     let recorder_next_address = recorder.ip_core.lock().unwrap().recorder_next_address();
-    let (recording, size) = recording_stream(&metadata, recorder_next_address)
+    let (recording, size) = recording_stream(&metadata, recorder_next_address, max_samples)
         .await
         .map_err(JsonError::server_error)?;
     let mut headers = HeaderMap::new();
@@ -279,9 +328,10 @@ pub async fn get_recording(
 async fn recording_stream(
     metadata: &RecordingMeta,
     recorder_next_address: usize,
+    max_samples: Option<usize>,
 ) -> Result<(SigmfStream, usize)> {
     const DUPLEX_SIZE: usize = 1 << 20;
-    let buffer = RecordingBuffer::new(metadata.mode, recorder_next_address).await?;
+    let buffer = RecordingBuffer::new(metadata.mode, recorder_next_address, max_samples).await?;
     let (duplex_write, duplex_read) = tokio::io::duplex(DUPLEX_SIZE);
     let stream = tokio_util::io::ReaderStream::new(duplex_read);
 
@@ -377,7 +427,11 @@ impl Mode {
 }
 
 impl RecordingBuffer {
-    async fn new(mode: RecorderMode, next_address: usize) -> Result<RecordingBuffer> {
+    async fn new(
+        mode: RecorderMode,
+        next_address: usize,
+        max_items: Option<usize>,
+    ) -> Result<RecordingBuffer> {
         let base_address = usize::from_str_radix(
             fs::read_to_string(
                 "/sys/class/maia-sdr/maia-sdr-recording/device/recording_base_address",
@@ -387,7 +441,14 @@ impl RecordingBuffer {
             .trim_start_matches("0x"),
             16,
         )?;
+
+        let mode = Mode(mode);
+        let input_bytes_per_item = mode.input_bytes_per_item();
+        let max_size = max_items.map(|items| items * input_bytes_per_item);
         let size = next_address - base_address;
+        // Constrain size <= max_size if max_size.is_some()
+        let size = max_size.map(|x| x.min(size)).unwrap_or(size);
+
         let mem = fs::OpenOptions::new()
             .read(true)
             .open("/dev/maia-sdr-recording")
@@ -406,17 +467,13 @@ impl RecordingBuffer {
             }
         };
 
-        let mode = Mode(mode);
-        let input_bytes_per_item = mode.input_bytes_per_item();
-        let chunk_bytes = input_bytes_per_item * Self::CHUNK_ITEMS;
-
         Ok(RecordingBuffer {
             base: map as *const u8,
             size,
             chunk: map as *const u8,
             mode,
             input_bytes_per_item,
-            chunk_bytes,
+            chunk_bytes: input_bytes_per_item * Self::CHUNK_ITEMS,
         })
     }
 
