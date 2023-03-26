@@ -16,7 +16,7 @@ jobs:
     name: Python Tests
     runs-on: ubuntu-latest
     container:
-      image: maiasdr/maia-sdr-devel:latest
+      image: ghcr.io/maia-sdr/maia-sdr-devel:latest
       options: --user root
     steps:
     - uses: actions/checkout@v3
@@ -28,7 +28,7 @@ jobs:
     name: cocotb Tests
     runs-on: ubuntu-latest
     container:
-      image: maiasdr/maia-sdr-devel:latest
+      image: ghcr.io/maia-sdr/maia-sdr-devel:latest
       options: --user root
     steps:
     - uses: actions/checkout@v3
