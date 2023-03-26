@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1] - 2023-03-26
+
+### Changed
+
+- Updated adi-hdl submodule to branch used in ADI Pluto firmware v0.36, which is uses
+  Vivado 2021.2.
+
 ## [0.1.0] - 2023-02-10
 
 ### Added
