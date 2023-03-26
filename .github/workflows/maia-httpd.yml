@@ -42,7 +42,10 @@ jobs:
     - name: Build
       run: cross build --verbose --target armv7-unknown-linux-gnueabihf
     - name: Run tests
-      run: cross test --verbose --target armv7-unknown-linux-gnueabihf
+      # Tests don't work if we build against buildroot's uclibc, which is the default.
+      # Here we override the default and build against cross's default toolchain, for which
+      # the tests work.
+      run: cargo clean && CROSS_CONFIG=/dev/null cross test --verbose --target armv7-unknown-linux-gnueabihf
   x86_64:
     name: Rust test x86_64
     runs-on: ubuntu-latest
