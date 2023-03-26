@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.1] - 2023-03-26
+
+### Changed
+
+- Bumped maia-hdl to v0.1.1. Updated adi-hdl submodule to Vivado 2021.2 branch.
+
 ## [0.2.0] - 2023-03-18
 
 ### Changed
@@ -33,6 +39,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface with real-time waterfall display and IQ recording in SigMF format to
   the Pluto RAM.
 
-[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.0...HEAD
+[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.0...maia-sdr-v0.2.1
 [0.2.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.1.0...maia-sdr-v0.2.0
 [0.1.0]: https://github.com/maia-sdr/maia-sdr/releases/tag/v0.1.0
