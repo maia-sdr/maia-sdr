@@ -20,7 +20,7 @@ from .recorder import Recorder12IQ
 from .spectrometer import Spectrometer
 
 # IP core version
-_version = '0.1.1'
+_version = '0.2.0'
 
 
 class MaiaSDR(Elaboratable):
@@ -29,7 +29,9 @@ class MaiaSDR(Elaboratable):
     This elaboratable is the top-level Maia SDR IP core.
     """
     def __init__(self):
-        self.axi4_awidth = 4
+        # This is the internal bus address width. The AXI4-Lite bus address
+        # width is self.axi4_awidth + 2.
+        self.axi4_awidth = 5
         self.s_axi_lite = ClockDomain()
         self.sampling = ClockDomain()
         self.clk2x = ClockDomain()
@@ -83,7 +85,7 @@ class MaiaSDR(Elaboratable):
             domain_in='sampling', domain_dma='s_axi_lite')
         self.sdr_registers = Registers(
             'sdr', {
-                0b0: Register(
+                0b000: Register(
                     'spectrometer',
                     [
                         Field('num_integrations',
@@ -95,7 +97,44 @@ class MaiaSDR(Elaboratable):
                               len(self.spectrometer.last_buffer),
                               0),
                     ]),
-            }, 1)
+                # TODO: add sensible reset values for these fields
+                # (4th element of the Field tuple)
+                0b001: Register(
+                    'fosphor_control',
+                    [
+                        Field('random', Access.RW, 2, 0),
+                        Field('wf_div', Access.RW, 2, 0),
+                        Field('wf_mode', Access.RW, 1, 0),
+                    ]),
+                0b010: Register(
+                    'fosphor_strobes',
+                    # don't share wstrobes on any of these fields
+                    [
+                        # pad from 12 to 16 bits to avoid sharing wstrobes
+                        Field('decim', Access.RWchanged, 16, 0),
+                        Field('wf_decim', Access.RWchanged, 8, 0),
+                        # pad from 1 to 8 bits to avoid sharing wstrobes
+                        Field('clear', Access.Wpulse, 8, 0),
+                    ]),
+                0b011: Register(
+                    'fosphor_vertical',
+                    [
+                        Field('offset', Access.RW, 16, 0),
+                        Field('scale', Access.RW, 16, 0),
+                    ]),
+                0b100: Register(
+                    'fosphor_times',
+                    [
+                        Field('rise', Access.RW, 16, 0),
+                        Field('decay', Access.RW, 16, 0),
+                    ]),
+                0b101: Register(
+                    'fosphor_params',
+                    [
+                        Field('alpha', Access.RW, 16, 0),
+                        Field('epsilon', Access.RW, 16, 0),
+                    ]),
+            }, 3)
         metadata = {
             'vendor': 'Daniel Estevez',
             'vendorID': 'destevez.net',
@@ -109,7 +148,7 @@ class MaiaSDR(Elaboratable):
         self.register_map = RegisterMap({
             0x0: self.control_registers,
             0x10: self.recorder_registers,
-            0x20: self.sdr_registers,
+            0x40: self.sdr_registers,
         }, metadata)
 
         self.re_in = Signal(self.spectrometer.width_in)
@@ -206,7 +245,7 @@ class MaiaSDR(Elaboratable):
         # TODO: convert all of this into a RegisterCrossbar module
         address = Signal(self.axi4_awidth, reset_less=True)
         wdata = Signal(32, reset_less=True)
-        sdr_regs_select = self.axi4lite.address[3] == 1
+        sdr_regs_select = self.axi4lite.address[4] == 1
         recorder_regs_select = (
             ~sdr_regs_select & (self.axi4lite.address[2] == 1))
         control_regs_select = (

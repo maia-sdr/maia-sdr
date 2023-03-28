@@ -4,21 +4,21 @@
   <vendorID>destevez.net</vendorID>
   <name>Maia SDR</name>
   <series>Maia SDR</series>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
   <description>Maia SDR IP core</description>
-  <licenseText>(C) Daniel Estevez 2022</licenseText>
+  <licenseText>(C) Daniel Estevez 2022-2023</licenseText>
   <width>32</width>
   <size>32</size>
   <peripherals>
     <peripheral>
       <name>Maia SDR</name>
-      <version>0.1.0</version>
+      <version>0.2.0</version>
       <description>Maia SDR IP core</description>
       <baseAddress>0x00000000</baseAddress>
       <access>read-write</access>
       <addressBlock>
         <offset>0</offset>
-        <size>0x24</size>
+        <size>0x60</size>
         <usage>registers</usage>
       </addressBlock>
       <registers>
@@ -151,7 +151,7 @@
         <register>
           <name>spectrometer</name>
           <description>spectrometer</description>
-          <addressOffset>0x20</addressOffset>
+          <addressOffset>0x40</addressOffset>
           <access>read-write</access>
           <fields>
             <field>
@@ -165,6 +165,118 @@
               <description>last_buffer</description>
               <bitRange>[12:10]</bitRange>
               <access>read-only</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>fosphor_control</name>
+          <description>fosphor_control</description>
+          <addressOffset>0x44</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>random</name>
+              <description>random</description>
+              <bitRange>[1:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>wf_div</name>
+              <description>wf_div</description>
+              <bitRange>[3:2]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>wf_mode</name>
+              <description>wf_mode</description>
+              <bitRange>[4:4]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>fosphor_strobes</name>
+          <description>fosphor_strobes</description>
+          <addressOffset>0x48</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>decim</name>
+              <description>decim</description>
+              <bitRange>[15:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>wf_decim</name>
+              <description>wf_decim</description>
+              <bitRange>[23:16]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>clear</name>
+              <description>clear</description>
+              <bitRange>[31:24]</bitRange>
+              <access>write-only</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>fosphor_vertical</name>
+          <description>fosphor_vertical</description>
+          <addressOffset>0x4c</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>offset</name>
+              <description>offset</description>
+              <bitRange>[15:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>scale</name>
+              <description>scale</description>
+              <bitRange>[31:16]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>fosphor_times</name>
+          <description>fosphor_times</description>
+          <addressOffset>0x50</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>rise</name>
+              <description>rise</description>
+              <bitRange>[15:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>decay</name>
+              <description>decay</description>
+              <bitRange>[31:16]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>fosphor_params</name>
+          <description>fosphor_params</description>
+          <addressOffset>0x54</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>alpha</name>
+              <description>alpha</description>
+              <bitRange>[15:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>epsilon</name>
+              <description>epsilon</description>
+              <bitRange>[31:16]</bitRange>
+              <access>read-write</access>
             </field>
           </fields>
         </register>
