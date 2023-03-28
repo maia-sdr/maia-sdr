@@ -22,9 +22,17 @@ Field = collections.namedtuple('RegisterField',
 class Access(enum.Enum):
     R = enum.auto()
     RW = enum.auto()
+    RWchanged = enum.auto()
     W = enum.auto()
+    Wchanged = enum.auto()
     Wpulse = enum.auto()
     Rsticky = enum.auto()
+
+
+READ_ACCESS = {Access.R, Access.RW, Access.RWchanged, Access.Rsticky}
+WRITE_ACCESS = {Access.RW, Access.RWchanged, Access.W, Access.Wchanged,
+                Access.Wpulse}
+CHANGE_ACCESS = {Access.RWchanged, Access.Wchanged}
 
 
 class Register(Elaboratable):
@@ -45,7 +53,8 @@ class Register(Elaboratable):
     ``Register`` was a dictionary. The field name is used as key. The fields
     accessed in this way are Signal()'s of the appropriate width. Depending on
     the ``Access`` mode of the field, these signals are used as input (``R``
-    and ``Rsticky``) or output (``RW``, ``W``, and ``Wpulse``).
+    and ``Rsticky``) or output (``RW``, ``W``, ``RWchanged``, ``Wchanged``,
+    and ``Wpulse``).
 
     The register supports interrupt generation. If interrupt generation is
     enabled, the register will have an interrupt output pin that is asserted
@@ -98,11 +107,14 @@ class Register(Elaboratable):
                          name=self._sig_name(field.name),
                          reset=field.reset)
             setattr(self, self._sig_name(field.name), sig)
+            if field.access in CHANGE_ACCESS:
+                name = self._sig_name_changed(field.name)
+                sig = Signal(1, name=name, reset=0)
+                setattr(self, name, sig)
             if field.access == Access.Rsticky:
-                sig = Signal(field.width,
-                             name=self._sig_name_sticky(field.name),
-                             reset=field.reset)
-                setattr(self, self._sig_name_sticky(field.name), sig)
+                name = self._sig_name_sticky(field.name)
+                sig = Signal(field.width, name=name, reset=field.reset)
+                setattr(self, name, sig)
 
     def __getitem__(self, name: str) -> Signal:
         return getattr(self, self._sig_name(name))
@@ -110,8 +122,14 @@ class Register(Elaboratable):
     def _sig_name(self, name: str) -> str:
         return f'field_{name}'
 
+    def _sig_name_changed(self, name: str) -> str:
+        return f'field_changed_{name}'
+
     def _sig_name_sticky(self, name: str) -> str:
         return f'field_sticky_{name}'
+
+    def changed(self, name: str) -> Signal:
+        return getattr(self, self._sig_name_changed(name))
 
     def elaborate(self, platform):
         m = Module()
@@ -127,7 +145,7 @@ class Register(Elaboratable):
             if field.access == Access.Rsticky:
                 sticky = getattr(self, self._sig_name_sticky(field.name))
                 m.d.sync += sticky.eq(sticky | self[field.name])
-            if field.access in [Access.R, Access.RW, Access.Rsticky]:
+            if field.access in READ_ACCESS:
                 rfield = (
                     self[field.name] if field.access != Access.Rsticky
                     else getattr(self, self._sig_name_sticky(field.name)))
@@ -138,12 +156,18 @@ class Register(Elaboratable):
                         m.d.sync += rfield.eq(self[field.name])
             if field.access == Access.Wpulse:
                 m.d.sync += self[field.name].eq(0)
-            if field.access in [Access.RW, Access.W, Access.Wpulse]:
+            if field.access in CHANGE_ACCESS:
+                m.d.sync += self.changed(field.name).eq(0)
+            if field.access in [Access.RW, Access.W,
+                                Access.RWchanged, Access.Wchanged,
+                                Access.Wpulse]:
                 for j in range(field.width):
                     k = offset + j
                     strobe = self.wstrobe[k // 8]
                     with m.If(strobe):
                         m.d.sync += self[field.name][j].eq(self.wdata[k])
+                        if field.access in CHANGE_ACCESS:
+                            m.d.sync += self.changed(field.name).eq(1)
             offset += field.width
             if offset > self.w:
                 raise ValueError('fields are too wide for register')
@@ -164,15 +188,13 @@ class Register(Elaboratable):
         address_offset = ET.SubElement(register, 'addressOffset')
         # We do not set the address offset text by now, since we
         # don't know it yet.
-        has_read = any([f.access in [Access.R, Access.RW, Access.Rsticky]
-                        for f in self.fields])
-        has_write = any([f.access in [Access.W, Access.RW, Access.Wpulse]
-                         for f in self.fields])
-        access_value = {(True, True): 'read-write',
-                        (True, False): 'read-only',
-                        (False, True): 'write-only'}[(has_read, has_write)]
+        has_read = any([f.access in READ_ACCESS for f in self.fields])
+        has_write = any([f.access in WRITE_ACCESS for f in self.fields])
+        access_values = {(True, True): 'read-write',
+                         (True, False): 'read-only',
+                         (False, True): 'write-only'}
         access = ET.SubElement(register, 'access')
-        access.text = access_value
+        access.text = access_values[(has_read, has_write)]
         fields = ET.SubElement(register, 'fields')
         offset = 0
         for field in self.fields:
@@ -187,13 +209,9 @@ class Register(Elaboratable):
             bitrange.text = f'[{offset+w-1}:{offset}]'
             offset += w
             faccess = ET.SubElement(f, 'access')
-            faccess.text = {
-                Access.RW: 'read-write',
-                Access.R: 'read-only',
-                Access.W: 'write-only',
-                Access.Wpulse: 'write-only',
-                Access.Rsticky: 'read-only',
-            }[field.access]
+            has_read = field.access in READ_ACCESS
+            has_write = field.access in WRITE_ACCESS
+            faccess.text = access_values[(has_read, has_write)]
         # TODO: add reset value and reset mask
         return register
 

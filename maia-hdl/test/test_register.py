@@ -25,9 +25,16 @@ class TestRegister(AmaranthSim):
              Field('wpulse_field', Access.Wpulse, 1, 0),
              Field('rsticky_field', Access.Rsticky, 1, 0)],
             interrupt=True)
+        # fields with "changed" support in a separate register
+        # for easiert wstrobe access
+        self.register2 = Register(
+            'dut_register2',
+            [Field('rw_changed_field', Access.RWchanged, 8, 0),
+             Field('w_changed_field', Access.RWchanged, 8, 0)])
         self.readable = Signal(5, reset=17)
         self.interrupt_enable = Signal()
         m.submodules.register = self.register
+        m.submodules.register2 = self.register2
         m.d.comb += [
             self.register['r_field'].eq(self.readable),
             self.register['rsticky_field'].eq(self.interrupt_enable),
@@ -86,6 +93,51 @@ class TestRegister(AmaranthSim):
             for _ in range(10):
                 yield
                 assert not (yield reg)
+
+        self.simulate(bench)
+
+    def test_changed(self):
+        def bench():
+            reg = self.register2
+            rw_field = reg['rw_changed_field']
+            w_field = reg['w_changed_field']
+            rw_changed = reg.changed('rw_changed_field')
+            w_changed = reg.changed('w_changed_field')
+            assert not (yield rw_changed)
+            assert not (yield w_changed)
+            assert (yield rw_field) == 0x00
+            assert (yield w_field) == 0x00
+            yield reg.wstrobe.eq(0x1)
+            yield reg.wdata.eq(0xabcd)
+            yield
+            yield reg.wstrobe.eq(0)
+            assert not (yield rw_changed)
+            assert not (yield w_changed)
+            assert (yield rw_field) == 0x00
+            assert (yield w_field) == 0x00
+            yield
+            assert (yield rw_changed)
+            assert not (yield w_changed)
+            assert (yield rw_field) == 0xcd
+            assert (yield w_field) == 0x00
+            yield
+            assert not (yield rw_changed)
+            assert not (yield w_changed)
+            assert (yield rw_field) == 0xcd
+            assert (yield w_field) == 0x00
+            yield reg.wstrobe.eq(0x2)
+            yield reg.wdata.eq(0x1234)
+            yield
+            yield reg.wstrobe.eq(0)
+            assert not (yield rw_changed)
+            assert not (yield w_changed)
+            assert (yield rw_field) == 0xcd
+            assert (yield w_field) == 0x00
+            yield
+            assert not (yield rw_changed)
+            assert (yield w_changed)
+            assert (yield rw_field) == 0xcd
+            assert (yield w_field) == 0x12
 
         self.simulate(bench)
 
