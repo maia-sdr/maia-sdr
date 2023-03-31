@@ -15,45 +15,4 @@ jobs:
       image: ghcr.io/maia-sdr/maia-sdr-devel:latest
       options: --user root
     steps:
-    - name: Checkout plutosdr-fw
-      uses: actions/checkout@v3
-      with:
-        repository: maia-sdr/plutosdr-fw
-        submodules: recursive
-    - name: Remove maia-sdr submodule
-      run: rm -rf maia-sdr
-    - name: Checkout maia-sdr
-      uses: actions/checkout@v3
-      with:
-        path: maia-sdr
-        # need to fetch history to get the latest tag with git describe
-        fetch-depth: 0
-        submodules: recursive
-    - name: Fetch Pluto XSA
-      run: |
-        cd maia-sdr
-        LATEST_TAG=$(git describe --abbrev=0 --tags)
-        wget -T 3 -t 1 -N http://github.com/maia-sdr/maia-sdr/releases/download/${LATEST_TAG}/pluto_system_top.xsa
-    - name: Build firmware
-      run: |
-        . /opt/rust/env
-        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin/:/usr/bin:/sbin:/bin:/opt/gcc-arm-linux-gnueabi/bin:$PATH:/opt/oss-cad-suite/bin
-        export PYTHONPATH=/usr/local/lib/python3.10/dist-packages
-        XSA_FILE=maia-sdr/pluto_system_top.xsa make
-    - name: Upload artifacts
-      uses: actions/upload-artifact@v3
-      with:
-        name: pluto-firmware
-        path: |
-          build/pluto.dfu
-          build/pluto.frm
-    - name: Create Pre-release
-      if: ${{ github.event_name != 'pull_request' }}
-      uses: softprops/action-gh-release@v1
-      with:
-        files: |
-          build/pluto.dfu
-          build/pluto.frm
-        name: Maia SDR main branch Pluto SDR firmware (experimental)
-        prerelease: true
-        tag_name: plutosdr-fw-prerelease
+    - run: echo success
