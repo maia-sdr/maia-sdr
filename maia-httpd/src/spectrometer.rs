@@ -81,9 +81,11 @@ impl Spectrometer {
             // TODO: potential optimization: do not hold the mutex locked while
             // we iterate over the buffers.
             for buffer in ip_core.get_spectrometer_buffers() {
-                // It is ok if send returns Err, because there might be
-                // no receiver handles in this moment.
-                let _ = self.sender.send(Self::buffer_u64_to_f32(buffer, scale));
+                if self.sender.receiver_count() > 0 {
+                    // It is ok if send returns Err, because there might be
+                    // no receiver handles in this moment.
+                    let _ = self.sender.send(Self::buffer_u64_to_f32(buffer, scale));
+                }
             }
         }
     }
