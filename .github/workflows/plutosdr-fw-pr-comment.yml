@@ -8,7 +8,6 @@ on:
 jobs:
   pr-comment:
     name: Add PR comment
-    needs: build-firmware
     runs-on: ubuntu-latest
     if: $${{ github.event.pull_requests.length > 0 }}
     steps:
