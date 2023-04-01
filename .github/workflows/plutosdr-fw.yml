@@ -47,8 +47,15 @@ jobs:
         path: |
           build/pluto.dfu
           build/pluto.frm
-    - name: Create Pre-release
-      if: ${{ github.event_name != 'pull_request' }}
+    - name: Delete previous pre-release
+      if: github.event_name != 'pull_request'
+      uses: dev-drprasad/delete-tag-and-release@v0.2.1
+      with:
+        tag_name: plutosdr-fw-prerelease
+        github_token: ${{ secrets.GITHUB_TOKEN }}
+        delete_release: true
+    - name: Create new pre-release
+      if: github.event_name != 'pull_request'
       uses: softprops/action-gh-release@v1
       with:
         files: |
