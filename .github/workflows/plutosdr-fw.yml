@@ -50,9 +50,10 @@ jobs:
     - name: Delete previous pre-release
       if: github.event_name != 'pull_request'
       uses: dev-drprasad/delete-tag-and-release@v0.2.1
+      env:
+        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: plutosdr-fw-prerelease
-        github_token: ${{ secrets.GITHUB_TOKEN }}
         delete_release: true
     - name: Create new pre-release
       if: github.event_name != 'pull_request'
