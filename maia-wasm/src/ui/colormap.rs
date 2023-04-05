@@ -4,6 +4,7 @@ use serde::{Deserialize, Serialize};
 pub enum Colormap {
     Turbo,
     Viridis,
+    Inferno,
 }
 
 impl Colormap {
@@ -11,6 +12,7 @@ impl Colormap {
         match self {
             Colormap::Turbo => &crate::colormap::turbo::COLORMAP,
             Colormap::Viridis => &crate::colormap::viridis::COLORMAP,
+            Colormap::Inferno => &crate::colormap::inferno::COLORMAP,
         }
     }
 }
@@ -22,6 +24,7 @@ impl std::str::FromStr for Colormap {
         Ok(match s {
             "Turbo" => Colormap::Turbo,
             "Viridis" => Colormap::Viridis,
+            "Inferno" => Colormap::Inferno,
             _ => return Err(()),
         })
     }
@@ -35,6 +38,7 @@ impl std::fmt::Display for Colormap {
             match self {
                 Colormap::Turbo => "Turbo",
                 Colormap::Viridis => "Viridis",
+                Colormap::Inferno => "Inferno",
             }
         )
     }
