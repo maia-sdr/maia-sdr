@@ -11,7 +11,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Print Github context (for debugging)
-      run: echo '${{ toJSON(github) }}'
+      env:
+        GITHUB_CONTEXT: ${{ toJson(github) }}
+      run: echo "$GITHUB_CONTEXT"
     - name: Add comment to PR with link to artifacts
       if: github.event.workflow_run.pull_requests[0] != null
       uses: peter-evans/create-or-update-comment@v2
