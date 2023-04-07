@@ -10,7 +10,7 @@ defaults:
 
 jobs:
   wasm:
-    name: Rust wasm
+    name: Build and test (wasm)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -27,9 +27,17 @@ jobs:
     - name: Build with wasm-pack
       run: wasm-pack build --target web
   x86_64:
-    name: Rust test x86_64
+    name: Build and test (x86_64)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
     - name: cargo test
       run: cargo test --verbose
+  publish:
+    if: startsWith(github.event.ref, 'refs/tags/maia-wasm-')
+    needs: [wasm, x86_64]
+    uses: ./.github/workflows/publish.yml
+    with:
+      path: maia-wasm
+    secrets:
+      registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}

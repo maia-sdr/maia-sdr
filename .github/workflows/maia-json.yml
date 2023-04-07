@@ -9,8 +9,8 @@ defaults:
     working-directory: maia-httpd/maia-json
 
 jobs:
-  rust:
-    name: Rust x86_64
+  build-test:
+    name: Build and test (x86_64)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v3
@@ -24,3 +24,11 @@ jobs:
       run: cargo build --verbose
     - name: Run tests
       run: cargo test --verbose
+  publish:
+    if: startsWith(github.event.ref, 'refs/tags/maia-json-')
+    needs: build-test
+    uses: ./.github/workflows/publish.yml
+    with:
+      path: maia-httpd/maia-json
+    secrets:
+      registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
