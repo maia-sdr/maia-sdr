@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.2.0] - 2023-04-07
+
+### Added
+
+- Optionally prepend timestamp to recording filename.
+- Optional recording maximum duration.
+
+### Changed
+
+- Build against buildroot toolchain instead of cross.
+- Spectrometer: skip f32 conversion when no receivers are connected.
+- Update to tower-http 0.4.
+
 ## [0.1.1] - 2023-03-18
 
 ### Fixed

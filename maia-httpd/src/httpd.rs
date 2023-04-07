@@ -9,10 +9,7 @@ use crate::{
     spectrometer::SpectrometerSampRate,
 };
 use anyhow::Result;
-use axum::{
-    routing::{get, get_service},
-    Router,
-};
+use axum::{routing::get, Router};
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::broadcast;
@@ -111,7 +108,7 @@ impl Server {
                 get(websocket::handler).with_state(waterfall_sender),
             )
             .route("/zeros", get(zeros::get_zeros)) // used for benchmarking
-            .fallback_service(get_service(ServeDir::new(".")).handle_error(servedir_error));
+            .fallback_service(ServeDir::new("."));
         tracing::info!(%address, "starting HTTP server");
         let server = axum::Server::bind(address)
             .serve(app.layer(TraceLayer::new_for_http()).into_make_service());
@@ -124,10 +121,6 @@ impl Server {
     pub async fn run(self) -> Result<()> {
         Ok(self.server.await?)
     }
-}
-
-async fn servedir_error(error: std::io::Error) -> json_error::JsonError {
-    json_error::JsonError::server_error(error.into())
 }
 
 mod json_error {
