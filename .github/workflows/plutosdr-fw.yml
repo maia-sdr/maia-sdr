@@ -59,13 +59,13 @@ jobs:
         name: pluto-firmware
     - name: Show directory tree (debug)
       run: ls -R
-    - name: Delete previous pre-release
+    - name: Delete plutosdr-fw-prerelease tag
       uses: dev-drprasad/delete-tag-and-release@v0.2.1
       env:
         GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
       with:
         tag_name: plutosdr-fw-prerelease
-        delete_release: true
+        delete_release: false
     - name: Create new pre-release
       uses: softprops/action-gh-release@v1
       with:
