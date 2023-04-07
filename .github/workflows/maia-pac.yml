@@ -1,0 +1,13 @@
+name: 'maia-pac'
+on:
+  push:
+    tags:
+      - maia-pac-**
+
+jobs:
+  publish:
+    uses: ./.github/workflows/publish.yml
+    with:
+      path: maia-httpd/maia-pac
+    secrets:
+      registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
