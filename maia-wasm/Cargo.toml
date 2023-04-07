@@ -8,7 +8,7 @@ license = "MIT OR Apache-2.0"
 homepage = "https://maia-sdr.org/"
 repository = "https://github.com/maia-sdr/maia-sdr/"
 keywords = ["SDR", "FPGA", "wasm", "WebGL2"]
-categories = ["science", "webassembly", "web-programming::http-client", "web-programming::websocket"]
+categories = ["science", "wasm", "web-programming::http-client", "web-programming::websocket"]
 
 [lib]
 crate-type = ["cdylib", "lib"]
