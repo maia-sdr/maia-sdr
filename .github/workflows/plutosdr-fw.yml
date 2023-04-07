@@ -32,7 +32,7 @@ jobs:
     - name: Fetch Pluto XSA
       run: |
         cd maia-sdr
-        LATEST_TAG=$(git describe --abbrev=0 --tags --exclude '*-prerelease')
+        LATEST_TAG=$(git describe --abbrev=0 --tags --match 'v*')
         wget -T 3 -t 1 -N http://github.com/maia-sdr/maia-sdr/releases/download/${LATEST_TAG}/pluto_system_top.xsa
     - name: Build firmware
       run: |
