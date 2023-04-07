@@ -1,6 +1,6 @@
 [package]
 name = "maia-wasm"
-version = "0.2.0"
+version = "0.3.0"
 edition = "2021"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR WASM frontend"
@@ -16,7 +16,7 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
-maia-json = { path = "../maia-httpd/maia-json", version = "0.1.1" }
+maia-json = { path = "../maia-httpd/maia-json", version = "0.2.0" }
 paste = "1.0"
 serde = "1.0"
 serde_json = "1.0"
