@@ -67,7 +67,7 @@ jobs:
         tag_name: plutosdr-fw-prerelease
         delete_release: false
     - name: Create new pre-release
-      uses: maia-sdr/action-gh-release@cd2d32b8112b1ec8e0b9cde0e41f47eae9fc2c1c
+      uses: maia-sdr/action-gh-release@2fbf229144d2f9544489516857ad14066fc45d29
       with:
         files: |
           pluto.dfu
