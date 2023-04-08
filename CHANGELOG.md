@@ -17,6 +17,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2023-04-08
+
+### Changed
+
+- Bumped maia-httpd to v0.2.0. New recording features.
+- Bumped maia-wasm to v0.3.0. New recording features and waterfall colormap.
+
 ## [0.2.1] - 2023-03-26
 
 ### Changed
@@ -39,7 +46,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface with real-time waterfall display and IQ recording in SigMF format to
   the Pluto RAM.
 
-[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.1...HEAD
-[0.2.1]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.0...maia-sdr-v0.2.1
-[0.2.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.1.0...maia-sdr-v0.2.0
+[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.1...v0.3.0
+[0.2.1]: https://github.com/maia-sdr/maia-sdr/compare/v0.2.0...v0.2.1
+[0.2.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/maia-sdr/maia-sdr/releases/tag/v0.1.0
