@@ -14,3 +14,12 @@ pub struct Args {
     #[clap(long, default_value = "0.0.0.0:8000")]
     pub listen: SocketAddr,
 }
+
+#[cfg(feature = "uclibc")]
+impl Default for Args {
+    fn default() -> Args {
+        Args {
+            listen: "0.0.0.0:8000".parse().unwrap(),
+        }
+    }
+}

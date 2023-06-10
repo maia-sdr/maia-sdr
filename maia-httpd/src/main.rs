@@ -1,4 +1,5 @@
 use anyhow::Result;
+#[cfg(not(feature = "uclibc"))]
 use clap::Parser;
 use maia_httpd::{app::App, args::Args};
 use tracing_subscriber::{fmt, prelude::*, EnvFilter};
@@ -10,5 +11,11 @@ async fn main() -> Result<()> {
         .with(EnvFilter::from_default_env())
         .init();
 
-    App::new(&Args::parse()).await?.run().await
+    // workaround for https://github.com/rust-lang/rust/issues/112488
+    #[cfg(feature = "uclibc")]
+    let args = Args::default();
+    #[cfg(not(feature = "uclibc"))]
+    let args = Args::parse();
+
+    App::new(&args).await?.run().await
 }
