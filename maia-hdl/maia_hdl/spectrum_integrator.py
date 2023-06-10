@@ -133,7 +133,8 @@ class SpectrumIntegrator(Elaboratable):
         read_counter_rst = 0
         read_counter = Signal(self.order_log2, reset=read_counter_rst)
         # Here 1 accounts for the extra delay (re_q, im_q) (see below).
-        write_counter_rst = read_counter_rst - cpwr.delay - 1
+        write_counter_rst = (
+            (read_counter_rst - cpwr.delay - 1) % 2**self.order_log2)
         write_counter = Signal(self.order_log2, reset=write_counter_rst)
         sum_counter = Signal(self.nw)
         not_first_sum = Signal()
