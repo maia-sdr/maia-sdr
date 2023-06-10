@@ -47,31 +47,3 @@ jobs:
         path: |
           build/pluto.dfu
           build/pluto.frm
-  create-pre-release:
-    name: Create pre-realease
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push'
-    needs: build-fw
-    steps:
-    - name: Download artifacts
-      uses: actions/download-artifact@v3
-      with:
-        name: pluto-firmware
-    - name: Show directory tree (debug)
-      run: ls -R
-    - name: Delete plutosdr-fw-prerelease tag
-      uses: dev-drprasad/delete-tag-and-release@v0.2.1
-      env:
-        GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-      with:
-        tag_name: plutosdr-fw-prerelease
-        delete_release: false
-    - name: Create new pre-release
-      uses: maia-sdr/action-gh-release@2fbf229144d2f9544489516857ad14066fc45d29
-      with:
-        files: |
-          pluto.dfu
-          pluto.frm
-        name: Maia SDR main branch Pluto SDR firmware (experimental)
-        prerelease: true
-        tag_name: plutosdr-fw-prerelease
