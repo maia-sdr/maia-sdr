@@ -1,6 +1,6 @@
 [package]
 name = "maia-httpd"
-version = "0.2.1"
+version = "0.2.2"
 edition = "2021"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR HTTP server"
@@ -9,6 +9,10 @@ homepage = "https://maia-sdr.org/"
 repository = "https://github.com/maia-sdr/maia-sdr/"
 keywords = ["SDR", "FPGA", "Zynq"]
 categories = ["hardware-support", "science", "web-programming::http-server", "web-programming::websocket"]
+
+[features]
+default = ["uclibc"]
+uclibc = []
 
 [dependencies]
 anyhow = { version = "1.0", features = ["std"] } 
