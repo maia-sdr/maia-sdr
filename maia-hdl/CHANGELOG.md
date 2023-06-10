@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.2] - 2023-06-10
+
+### Fixed
+
+- Warning in spectrum integrator counter reset.
+
 ## [0.1.1] - 2023-03-26
 
 ### Changed
