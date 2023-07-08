@@ -103,8 +103,8 @@ class MaiaSDR(Elaboratable):
             'series': 'Maia SDR',
             'version': _version,
             'description': 'Maia SDR IP core',
-            # TODO: set license text
-            'licenseText': '(C) Daniel Estevez 2022-2023',
+            'licenseText': ('SPDX-License-Identifier: MIT '
+                            'Copyright (C) Daniel Estevez 2022-2023'),
         }
         self.register_map = RegisterMap({
             0x0: self.control_registers,
