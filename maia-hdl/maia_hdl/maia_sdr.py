@@ -160,9 +160,9 @@ class MaiaSDR(Elaboratable):
             's_axi_lite', 'sync', self.sdr_registers.aw)
 
         m.submodules.common_edge_2x = common_edge_2x = ClkNxCommonEdge(
-            'sync', 'clk2x')
+            'sync', 'clk2x', 2)
         m.submodules.common_edge_3x = common_edge_3x = ClkNxCommonEdge(
-            'sync', 'clk3x')
+            'sync', 'clk3x', 3)
 
         # RX IQ CDC
         m.submodules.rxiq_cdc = rxiq_cdc = RxIQCDC('sampling', 'sync', 12)

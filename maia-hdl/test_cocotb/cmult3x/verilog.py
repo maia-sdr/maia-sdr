@@ -24,7 +24,7 @@ class Tb(Elaboratable):
         m = Module()
         m.submodules.dut = self.dut
         m.submodules.common_edge = common_edge = ClkNxCommonEdge(
-            'sync', self.clk3x)
+            'sync', self.clk3x, 3)
         m.d.comb += self.dut.common_edge.eq(common_edge.common_edge)
         return m
 
