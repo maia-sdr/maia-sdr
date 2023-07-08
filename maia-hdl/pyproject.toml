@@ -1,6 +1,6 @@
 [project]
 name = "maia_hdl"
-version = "0.2.0"
+version = "0.3.0"
 authors = [
   { name="Daniel Estevez", email="daniel@destevez.net" },
 ]
