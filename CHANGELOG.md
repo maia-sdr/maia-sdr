@@ -17,7 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
-## [0.4.0] - 2023-07-09
+## [0.5.0] - 2023-07-08
+
+- Bumped maia-hdl to v0.3.0. Timing improvement.
+
+## [0.4.0] - 2023-07-08
 
 - Bumped maia-hdl to v0.2.0. Added support for Pluto+.
 
