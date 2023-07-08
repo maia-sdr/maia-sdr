@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.3.0] - 2023-07-08
+
+### Changed
+
+- Register output of ClkNxCommonEdge to improve timing (API-breaking change).
+
 ## [0.2.0] - 2023-07-08
 
 ### Added
