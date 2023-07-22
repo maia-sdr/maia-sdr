@@ -10,7 +10,7 @@ on:
 jobs:
   build-fw:
     name: Build Pluto SDR firmware
-    runs-on: ubuntu-latest
+    runs-on: [self-hosted, vivado]
     container:
       image: ghcr.io/maia-sdr/maia-sdr-devel:latest
       options: --user root
