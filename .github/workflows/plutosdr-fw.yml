@@ -13,6 +13,8 @@ jobs:
     runs-on: [self-hosted, vivado]
     container:
       image: ghcr.io/maia-sdr/maia-sdr-devel:latest
+      volumes:
+        - vivado2021_2:/opt/Xilinx
       options: --user root
     steps:
     - name: Checkout plutosdr-fw
@@ -29,17 +31,27 @@ jobs:
         # need to fetch history to get the latest tag with git describe
         fetch-depth: 0
         submodules: recursive
-    - name: Fetch Pluto XSA
-      run: |
-        cd maia-sdr
-        LATEST_TAG=$(git describe --abbrev=0 --tags --match 'v*')
-        wget -T 3 -t 1 -N http://github.com/maia-sdr/maia-sdr/releases/download/${LATEST_TAG}/pluto_system_top.xsa
     - name: Build firmware
+      # xsct, which is run by the make process, uses Xvfb, which usually needs a
+      # connection to an X server (even though it is a CLI application). We run
+      # Xvfb in the container to create a "fake" X session that makes xsct
+      # happy.
+      #
+      # We cannot '.' the main settings.sh file for Vivado, because it uses
+      # 'source' to run the sub-files, and we are not using bash. Instead, we
+      # '.' each individual sub-file.
       run: |
+        . /opt/Xilinx/Vitis/2021.2/.settings64-Vitis.sh
+        . /opt/Xilinx/Vivado/2021.2/.settings64-Vivado.sh
+        . /opt/Xilinx/Vitis_HLS/2021.2/.settings64-Vitis_HLS.sh
         . /opt/rust/env
         export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin/:/usr/bin:/sbin:/bin:/opt/gcc-arm-linux-gnueabi/bin:$PATH:/opt/oss-cad-suite/bin
         export PYTHONPATH=/usr/local/lib/python3.10/dist-packages
-        XSA_FILE=maia-sdr/pluto_system_top.xsa make
+        apt-get update
+        DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb
+        Xvfb :10 &
+        export DISPLAY=:10
+        make
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
       with:
@@ -47,3 +59,8 @@ jobs:
         path: |
           build/pluto.dfu
           build/pluto.frm
+    # The working directory in the self-hosted runner needs be cleaned before
+    # building. We use if: ${{ always() }} to clean even if the build fails.
+    - name: Clean up runner working dir
+      uses: TooMuch4U/actions-clean@v2.1
+      if: ${{ always() }}
