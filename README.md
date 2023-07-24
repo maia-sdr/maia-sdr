@@ -19,12 +19,12 @@ Stable releases of firmware images for the ADALM Pluto can be found in the
 [plutosdr-fw](https://github.com/maia-sdr/plutosdr-fw) repository. See also the
 [installation instructions](https://maia-sdr.org/installation/).
 
-Experimental ADALM Pluto firmware images are built automatically with Github's
-actions system. To download the firmware image for the latest commit in the
-`main` branch (or for any other commit), click on the actions check, then go to
-the `plutosdr-fw` action details, click on the summary, and download the
-`pluto-firmware` artifact. This procedure is illustrated by the following
-screenshots.
+Development ADALM Pluto firmware images for each commit and pull request are
+built automatically with Github's actions system. To download the firmware image
+for the latest commit in the `main` branch (or for any other commit), click on
+the actions check, then go to the `plutosdr-fw` action details, click on the
+summary, and download the `pluto-firmware` artifact. This procedure is
+illustrated by the following screenshots.
 
 ![List of actions](readme-images/fw-artifact-1.png)
 
@@ -34,14 +34,6 @@ screenshots.
 
 For each pull request, a firmware image is also built. The bot adds a comment to
 the pull request with a link to the firmware when it is ready.
-
-Note that the process for building firmware images with Github actions is
-currently experimental and that the FPGA image is not built, because it is not
-possible to run Vivado in a Github-hosted runner. The actions system will take
-the latest XSA file published as an asset in a maia-sdr release. This may or may
-not work with the current state of the `main` branch or a particular pull
-request. The main goal of this system is to allow people to preview and test new
-features before they make it into stable releases.
 
 ## Support
 
