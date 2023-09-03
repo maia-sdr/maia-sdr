@@ -238,7 +238,7 @@ impl Metadata {
                 {
                     "core:sample_start": 0,
                     "core:frequency": self.frequency,
-                    "core.datetime": self.datetime.to_rfc3339_opts(SecondsFormat::Millis, true)
+                    "core:datetime": self.datetime.to_rfc3339_opts(SecondsFormat::Millis, true)
                 }
             ],
             "annotations": []
@@ -272,7 +272,7 @@ mod test {
   "annotations": [],
   "captures": [
     {
-      "core.datetime": "2022-11-01T00:00:00.000Z",
+      "core:datetime": "2022-11-01T00:00:00.000Z",
       "core:frequency": 2400000000.0,
       "core:sample_start": 0
     }
