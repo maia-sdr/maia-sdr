@@ -49,7 +49,7 @@ class TestCmult(AmaranthSim):
                          + 1j * im_a[j-self.dut.delay])
                         * (re_b[j-self.dut.delay]
                            + 1j * im_b[j-self.dut.delay]))
-                    assert out == expected,\
+                    assert out == expected, \
                         f'out = {out}, expected = {expected} @ cycle = {j}'
 
         self.simulate(bench)
@@ -92,7 +92,7 @@ class TestCmult3x(AmaranthSim):
                          + 1j * im_a[j-self.cmult.delay])
                         * (re_b[j-self.cmult.delay]
                            + 1j * im_b[j-self.cmult.delay]))
-                    assert out == expected,\
+                    assert out == expected, \
                         f'out = {out}, expected = {expected} @ cycle = {j}'
 
         self.simulate(bench, named_clocks={self.domain_3x: 4e-9})

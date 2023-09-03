@@ -55,7 +55,7 @@ class TestCpwr(AmaranthSim):
                     k = j - self.dut.delay
                     expected = self.dut.model(
                         re[k], im[k], add[k + self.add_latency])
-                    assert out == expected,\
+                    assert out == expected, \
                         f'out = {out}, expected = {expected} @ cycle = {j}'
         self.simulate(bench, vcd)
 

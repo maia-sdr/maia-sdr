@@ -87,7 +87,7 @@ async def run_test(dut, backpressure_inserter=None):
         expected[word*bytes_per_word:(word+1)*bytes_per_word] = (
             array.array('B', struct.pack('<Q', word % BRAM_SIZE)))
 
-    assert tb.memory._data[:bytes_written] == expected,\
+    assert tb.memory._data[:bytes_written] == expected, \
         'memory contents do not match'
 
 
