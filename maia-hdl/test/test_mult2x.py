@@ -49,7 +49,7 @@ class TestMult2x(AmaranthSim):
                         (re[j-self.mult.delay]
                          + 1j * im[j-self.mult.delay])
                         * real[j-self.mult.delay])
-                    assert out == expected,\
+                    assert out == expected, \
                         f'out = {out}, expected = {expected} @ cycle = {j}'
         self.simulate(bench, named_clocks={self.domain_2x: 6e-9})
 

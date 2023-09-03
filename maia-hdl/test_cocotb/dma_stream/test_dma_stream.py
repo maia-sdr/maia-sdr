@@ -107,7 +107,7 @@ async def run_test(dut, backpressure_inserter=None):
         expected[address:address+bytes_per_word] = (
             array.array('B', struct.pack('<Q', word)))
 
-    assert tb.memory._data == expected,\
+    assert tb.memory._data == expected, \
         'memory contents do not match'
 
 
