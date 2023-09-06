@@ -454,7 +454,7 @@ impl Waterfall {
         let boundingbox_margin_factor = 1.1;
         let width_boundingbox = boundingbox_margin_factor
             * engine.text_renderer_text_width("0000.000", TEXT_HEIGHT_PX)?;
-        let max_depth_labels = 6;
+        let max_depth_labels = 4;
         let max_depth = max_depth_labels + 2;
 
         let s = (self.samp_rate * 0.5 * width_boundingbox as f64).log10();
@@ -465,7 +465,6 @@ impl Waterfall {
         } else {
             (10.0_f64.powf(s2), false)
         };
-
         let start = ((self.center_freq - 0.5 * self.samp_rate) / step).floor() as i32 - 1;
         let stop = ((self.center_freq + 0.5 * self.samp_rate) / step).ceil() as i32 + 1;
         let mut freqs = (start..=stop).map(|k| k as f64 * step).collect::<Vec<_>>();
@@ -499,7 +498,15 @@ impl Waterfall {
 
         // TODO: cull frequencies outside passband
 
+        // We need to have 2 vertices per frequency for the ticks, and we cannot
+        // have more than 1 << 16 vertices, since we index them with a u16.
+        assert!(2 * freqs.len() <= (1 << 16));
+
         let freqs_labels = &freqs[..nfreqs[max_depth_labels - 1]];
+        // We need to have 4 vertices per frequency label for the labels, and we
+        // cannot have more than 1 << 16 vertices, since we index them with a
+        // u16.
+        assert!(4 * freqs_labels.len() <= (1 << 16));
 
         let y = -0.96;
         let vertices_labels = freqs_labels
@@ -527,7 +534,9 @@ impl Waterfall {
             })
             .collect::<Vec<u16>>();
 
-        let indices_ticks = (0..freqs.len() as u16).collect::<Vec<u16>>();
+        let indices_ticks = (0..vertices_ticks.len())
+            .map(|x| x as u16)
+            .collect::<Vec<u16>>();
 
         let texture_texts = freqs_labels
             .iter()
