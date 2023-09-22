@@ -141,9 +141,8 @@ class Cmult3x(Elaboratable):
 
     Parameters
     ----------
-    domain_3x : Optional[str]
-        Name of the clock domain of the 3x clock. This is only used when
-        cmult3x is enabled.
+    domain_3x : str
+        Name of the clock domain of the 3x clock.
     a_width : int
         Width of operand 'a'.
     b_width : int
@@ -157,8 +156,7 @@ class Cmult3x(Elaboratable):
         Delay (in samples) introduced by this module.
     common_edge : Signal(), in
         A signal that changes with the 3x clock and is high on the cycles
-        immediately after the rising edge of the 1x clock. This is only
-        present when cmult3x is enabled.
+        immediately after the rising edge of the 1x clock.
     clken : Signal(), in
         Clock enable.
     re_a : Signal(signed(a_width)), in
