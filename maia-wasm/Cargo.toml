@@ -16,7 +16,7 @@ crate-type = ["cdylib", "lib"]
 [dependencies]
 console_error_panic_hook = "0.1"
 js-sys = "0.3"
-maia-json = { path = "../maia-httpd/maia-json", version = "0.2.0" }
+maia-json = { path = "../maia-httpd/maia-json", version = "0.3.0" }
 paste = "1.0"
 serde = "1.0"
 serde_json = "1.0"

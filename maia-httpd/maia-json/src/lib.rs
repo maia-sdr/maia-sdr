@@ -203,6 +203,10 @@ pub enum SpectrometerMode {
     PeakDetect,
 }
 
+impl_str_conv!(SpectrometerMode,
+               "Average" => Average,
+               "Peak detect" => PeakDetect);
+
 /// IQ recorder JSON schema.
 ///
 /// This JSON schema corresponds to GET requests on `/api/recorder`. It contains
