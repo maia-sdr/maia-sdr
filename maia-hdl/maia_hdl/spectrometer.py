@@ -53,6 +53,8 @@ class Spectrometer(Elaboratable):
         Input samples imaginary part.
     number_integrations : Signal(10), in
         Sets the number of integrations to use in the integrator.
+    peak_detect : Signal(), in
+            Enables peak detect mode (instead of average power mode).
     last_buffer : Signal(dma_buffers_log2), out
         Indicates the last buffer to which the DMA has written to.
     interrupt_out : Signal(), out
@@ -79,6 +81,7 @@ class Spectrometer(Elaboratable):
         self.im_in = Signal(self.width_in)
 
         self.number_integrations = Signal(self.nint_width)
+        self.peak_detect = Signal()
         self.last_buffer = Signal(dma_buffers_log2)
 
         self.interrupt_out = Signal()
@@ -112,8 +115,8 @@ class Spectrometer(Elaboratable):
             2 * width_fft_out + self.nint_width + 1
             - self.width_integrator_out)
         m.submodules.integrator = integrator = SpectrumIntegrator(
-            width_fft_out, self.nint_width, self.fft_order_log2,
-            cpwr_truncate=cpwr_truncate)
+            self._domain_3x, width_fft_out, self.nint_width,
+            self.fft_order_log2, cpwr_truncate=cpwr_truncate)
 
         m.submodules.dma = dma = self.dma
 
@@ -128,7 +131,9 @@ class Spectrometer(Elaboratable):
             fft.im_in.eq(self.im_in),
 
             integrator.nint.eq(self.number_integrations),
+            integrator.peak_detect.eq(self.peak_detect),
             integrator.clken.eq(self.strobe_in),
+            integrator.common_edge.eq(self.common_edge_3x),
             integrator.input_last.eq(fft.out_last),
             integrator.re_in.eq(fft.re_out),
             integrator.im_in.eq(fft.im_out),
