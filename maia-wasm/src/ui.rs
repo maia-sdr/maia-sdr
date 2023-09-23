@@ -68,6 +68,7 @@ ui_elements! {
     ad9361_rx_gain: HtmlInputElement => NumberInput<f64>,
     spectrometer_output_sampling_frequency: HtmlInputElement
         => NumberInput<f64, input::IntegerPresentation>,
+    spectrometer_mode: HtmlSelectElement => EnumInput<maia_json::SpectrometerMode>,
     recording_metadata_filename: HtmlInputElement => TextInput,
     recorder_prepend_timestamp: HtmlInputElement => CheckboxInput,
     recording_metadata_description: HtmlInputElement => TextInput,
@@ -113,6 +114,7 @@ impl Ui {
             ad9361_rx_rf_bandwidth,
             ad9361_rx_gain_mode,
             spectrometer_output_sampling_frequency,
+            spectrometer_mode,
             recording_metadata_filename,
             recorder_prepend_timestamp,
             recording_metadata_description,
@@ -149,7 +151,8 @@ impl Ui {
         maia_json::Spectrometer,
         maia_json::PatchSpectrometer,
         SPECTROMETER_URL,
-        output_sampling_frequency
+        output_sampling_frequency,
+        mode
     );
 
     impl_section!(
