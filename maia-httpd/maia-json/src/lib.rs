@@ -167,6 +167,8 @@ pub struct Spectrometer {
     pub number_integrations: u32,
     /// FFT size (read-only).
     pub fft_size: u32,
+    /// Spectrometer mode.
+    pub mode: SpectrometerMode,
 }
 
 /// Spectrometer PATCH JSON schema.
@@ -183,6 +185,22 @@ pub struct PatchSpectrometer {
     /// Number of non-coherent integrations.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub number_integrations: Option<u32>,
+    /// Spectrometer mode.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mode: Option<SpectrometerMode>,
+}
+
+/// Spectrometer mode.
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum SpectrometerMode {
+    /// Power average mode.
+    ///
+    /// The average power over the integration period is computed.
+    Average,
+    /// Peak detect mode.
+    ///
+    /// The maximum (peak) power over the integration period is computed.
+    PeakDetect,
 }
 
 /// IQ recorder JSON schema.

@@ -1,5 +1,5 @@
 use super::json_error::JsonError;
-use crate::{fpga::IpCore, iio::Ad9361, spectrometer::SpectrometerSampRate};
+use crate::{fpga::IpCore, iio::Ad9361, spectrometer::SpectrometerConfig};
 use anyhow::Result;
 use axum::Json;
 use maia_json::{PatchSpectrometer, Spectrometer};
@@ -12,7 +12,7 @@ const FFT_SIZE: u32 = 4096;
 pub struct State {
     pub ip_core: Arc<std::sync::Mutex<IpCore>>,
     pub ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
-    pub spectrometer_samp_rate: SpectrometerSampRate,
+    pub spectrometer_config: SpectrometerConfig,
 }
 
 impl State {
@@ -23,17 +23,19 @@ impl State {
 
 pub async fn spectrometer_json(state: &State) -> Result<Spectrometer> {
     let samp_rate = state.samp_rate().await?;
-    state.spectrometer_samp_rate.set(samp_rate as f32);
-    let num_integrations = state
-        .ip_core
-        .lock()
-        .unwrap()
-        .spectrometer_number_integrations();
+    let ip_core = state.ip_core.lock().unwrap();
+    let num_integrations = ip_core.spectrometer_number_integrations();
+    let mode = ip_core.spectrometer_mode();
+    drop(ip_core);
+    state
+        .spectrometer_config
+        .set_samp_rate_mode(samp_rate as f32, mode);
     Ok(Spectrometer {
         input_sampling_frequency: samp_rate,
         output_sampling_frequency: samp_rate / (f64::from(FFT_SIZE) * f64::from(num_integrations)),
         number_integrations: num_integrations,
         fft_size: FFT_SIZE,
+        mode,
     })
 }
 
@@ -51,6 +53,9 @@ pub async fn get_spectrometer(
 }
 
 async fn update_spectrometer(state: &State, patch: &PatchSpectrometer) -> Result<()> {
+    if let Some(mode) = &patch.mode {
+        state.ip_core.lock().unwrap().set_spectrometer_mode(*mode);
+    }
     match patch {
         PatchSpectrometer {
             number_integrations: Some(n),

@@ -6,7 +6,7 @@
 use crate::{
     fpga::{InterruptWaiter, IpCore},
     iio::Ad9361,
-    spectrometer::SpectrometerSampRate,
+    spectrometer::SpectrometerConfig,
 };
 use anyhow::Result;
 use axum::{routing::get, Router};
@@ -51,7 +51,7 @@ impl Server {
         address: &std::net::SocketAddr,
         ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
         ip_core: Arc<std::sync::Mutex<IpCore>>,
-        spectrometer_samp_rate: SpectrometerSampRate,
+        spectrometer_config: SpectrometerConfig,
         waiter_recorder: InterruptWaiter,
         waterfall_sender: broadcast::Sender<Bytes>,
     ) -> Result<Server> {
@@ -61,7 +61,7 @@ impl Server {
         let spectrometer = spectrometer::State {
             ip_core,
             ad9361: Arc::clone(&ad9361),
-            spectrometer_samp_rate,
+            spectrometer_config,
         };
         let api = api::Api::new(Arc::clone(&ad9361), spectrometer.clone(), recorder.clone());
 

@@ -19,10 +19,11 @@ pub struct IpCore {
     registers: Registers,
     phys_addr: usize,
     spectrometer: Dma,
-    // RAM-based cache for the number of spectrometer integrations. This is used
-    // to speed up IpCore::spectrometer_number_integrations by avoiding to read
-    // the FPGA register.
+    // RAM-based cache for the number of spectrometer integrations and
+    // mode. These are used to speed up IpCore::spectrometer_number_integrations
+    // and IpCore::spectrometer_mode by avoiding to read the FPGA register.
     spectrometer_integrations: Cell<u32>,
+    spectrometer_mode: Cell<maia_json::SpectrometerMode>,
 }
 
 /// Interrupt waiter.
@@ -125,9 +126,10 @@ impl IpCore {
             registers: Registers(mapping),
             phys_addr,
             spectrometer,
-            // This is initialized to the correct value below, after removing
+            // These are initialized to the correct value below, after removing
             // the SDR reset.
             spectrometer_integrations: Cell::new(0),
+            spectrometer_mode: Cell::new(maia_json::SpectrometerMode::Average),
         };
 
         ip_core.log_open().await?;
@@ -141,6 +143,13 @@ impl IpCore {
                 .num_integrations()
                 .bits()
                 .into(),
+        );
+        ip_core.spectrometer_mode.set(
+            if ip_core.registers.spectrometer.read().peak_detect().bit() {
+                maia_json::SpectrometerMode::PeakDetect
+            } else {
+                maia_json::SpectrometerMode::Average
+            },
         );
         let interrupt_handler = InterruptHandler::new(uio, interrupt_registers);
         Ok((ip_core, interrupt_handler))
@@ -206,6 +215,18 @@ impl IpCore {
         self.spectrometer_integrations.get()
     }
 
+    /// Returns the current spectrometer mode.
+    ///
+    /// This register indicates whether the spectrometer is running in average
+    /// power mode or in peak detect mode.
+    ///
+    /// Note: [`IpCore`] caches in RAM the value of this register every time
+    /// that it is updated, so calls to this function are very fast because the
+    /// FPGA register doesn't need to be accessed.
+    pub fn spectrometer_mode(&self) -> maia_json::SpectrometerMode {
+        self.spectrometer_mode.get()
+    }
+
     /// Sets the value of the number of integrations register of the spectrometer.
     ///
     /// See [`IpCore::spectrometer_number_integrations`].
@@ -221,6 +242,20 @@ impl IpCore {
         };
         self.spectrometer_integrations.set(value);
         Ok(())
+    }
+
+    /// Sets the spectrometer mode.
+    ///
+    /// See [`IpCore::spectrometer_mode`].
+    pub fn set_spectrometer_mode(&self, mode: maia_json::SpectrometerMode) {
+        let peak_detect = match mode {
+            maia_json::SpectrometerMode::Average => false,
+            maia_json::SpectrometerMode::PeakDetect => true,
+        };
+        self.registers
+            .spectrometer
+            .modify(|_, w| w.peak_detect().bit(peak_detect));
+        self.spectrometer_mode.set(mode);
     }
 
     /// Returns the new buffers that have been written by the spectrometer.

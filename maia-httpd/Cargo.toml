@@ -24,8 +24,8 @@ futures = "0.3"
 http = "0.2"
 hyper = "0.14"
 libc = "0.2"
-maia-json = { path = "maia-json", version = "0.2.0" }
-maia-pac = { path = "maia-pac", version = "0.1.0"  }
+maia-json = { path = "maia-json", version = "0.3.0" }
+maia-pac = { path = "maia-pac", version = "0.2.0"  }
 nix = { version = "0.27", features = ["ioctl", "time"] }
 page_size = "0.6"
 paste = "1.0"

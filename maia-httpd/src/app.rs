@@ -39,14 +39,17 @@ impl App {
             interrupt_handler.waiter_spectrometer(),
             waterfall_sender.clone(),
         );
-        // Initialize spectrometer sample rate
-        let spectrometer_samp_rate = spectrometer.samp_rate_setter();
-        spectrometer_samp_rate.set(ad9361.lock().await.get_sampling_frequency().await? as f32);
+        // Initialize spectrometer sample rate and mode
+        let spectrometer_config = spectrometer.config();
+        spectrometer_config.set_samp_rate_mode(
+            ad9361.lock().await.get_sampling_frequency().await? as f32,
+            ip_core.lock().unwrap().spectrometer_mode(),
+        );
         let httpd = httpd::Server::new(
             &args.listen,
             Arc::clone(&ad9361),
             ip_core,
-            spectrometer_samp_rate,
+            spectrometer_config,
             interrupt_handler.waiter_recorder(),
             waterfall_sender,
         )
