@@ -94,6 +94,10 @@ class MaiaSDR(Elaboratable):
                               Access.R,
                               len(self.spectrometer.last_buffer),
                               0),
+                        Field('peak_detect',
+                              Access.RW,
+                              1,
+                              0),
                     ]),
             }, 1)
         metadata = {
@@ -179,6 +183,8 @@ class MaiaSDR(Elaboratable):
             sync_spectrometer_interrupt.i.eq(self.spectrometer.interrupt_out),
             self.spectrometer.number_integrations.eq(
                 self.sdr_registers['spectrometer']['num_integrations']),
+            self.spectrometer.peak_detect.eq(
+                self.sdr_registers['spectrometer']['peak_detect']),
             self.sdr_registers['spectrometer']['last_buffer'].eq(
                 self.spectrometer.last_buffer),
         ]

@@ -165,7 +165,7 @@ class CpwrPeak(Elaboratable):
 
         Attributes
         ----------
-        delay : in
+        delay : int, out
             Delay (in samples) introduced by this module to the complex
             input data.
         common_edge : Signal(), in
