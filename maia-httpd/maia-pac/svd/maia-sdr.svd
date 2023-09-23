@@ -4,15 +4,15 @@
   <vendorID>destevez.net</vendorID>
   <name>Maia SDR</name>
   <series>Maia SDR</series>
-  <version>0.1.0</version>
+  <version>0.4.0</version>
   <description>Maia SDR IP core</description>
-  <licenseText>(C) Daniel Estevez 2022</licenseText>
+  <licenseText>SPDX-License-Identifier: MIT Copyright (C) Daniel Estevez 2022-2023</licenseText>
   <width>32</width>
   <size>32</size>
   <peripherals>
     <peripheral>
       <name>Maia SDR</name>
-      <version>0.1.0</version>
+      <version>0.4.0</version>
       <description>Maia SDR IP core</description>
       <baseAddress>0x00000000</baseAddress>
       <access>read-write</access>
@@ -165,6 +165,12 @@
               <description>last_buffer</description>
               <bitRange>[12:10]</bitRange>
               <access>read-only</access>
+            </field>
+            <field>
+              <name>peak_detect</name>
+              <description>peak_detect</description>
+              <bitRange>[13:13]</bitRange>
+              <access>read-write</access>
             </field>
           </fields>
         </register>
