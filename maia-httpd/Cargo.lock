@@ -683,14 +683,14 @@ dependencies = [
 
 [[package]]
 name = "maia-json"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "maia-pac"
-version = "0.1.0"
+version = "0.2.0"
 dependencies = [
  "vcell",
 ]
