@@ -17,6 +17,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.0] - 2023-09-29
+
+- Bumped maia-hdl to v0.4.0. Added spectrometer peak detect.
+- Bumped maia-httpd to v0.3.0. Added spectrometer mode control.
+- Bumped maia-json to v0.3.0. Added spectrometer mode field.
+- Bumped maia-pac to v0.2.0. Update with SVD from maia-hdl v0.4.0.
+- Bumped maia-wasm to v0.4.0. Added spectrometer mode control.
+
 ## [0.5.1] - 2023-09-03
 
 - Bumped maia-httpd to v0.2.3. Fixed SigMF formatting and updated dependencies.
@@ -69,7 +77,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface with real-time waterfall display and IQ recording in SigMF format to
   the Pluto RAM.
 
-[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.5.1...HEAD
+[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.6.0...HEAD
+[0.6.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/maia-sdr/maia-sdr/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.3.2...v0.4.0
