@@ -1,6 +1,6 @@
 [package]
 name = "maia-httpd"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR HTTP server"
