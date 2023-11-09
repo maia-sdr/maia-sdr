@@ -215,7 +215,6 @@ macro_rules! impl_onchange {
                         let patch = $patch_json { $element: Some(value), ..Default::default() };
                         let ui = ui.clone();
                         future_to_promise(async move {
-                            let patch = patch;
                             ui.[<patch_ $name _update_elements>](&patch).await?;
                             Ok(JsValue::NULL)
                         }).into()
