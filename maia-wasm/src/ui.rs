@@ -374,7 +374,6 @@ impl Ui {
     fn patch_recorder_promise(&self, patch: maia_json::PatchRecorder) -> JsValue {
         let ui = self.clone();
         future_to_promise(async move {
-            let patch = patch;
             match ui.patch_recorder(&patch).await {
                 Ok(json_output) => ui.update_recorder_button(&json_output),
                 Err(PatchError::RequestFailed(_)) => {
