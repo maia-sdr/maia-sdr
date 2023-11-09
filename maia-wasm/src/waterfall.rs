@@ -465,8 +465,10 @@ impl Waterfall {
         } else {
             (10.0_f64.powf(s2), false)
         };
-        let start = ((self.center_freq - 0.5 * self.samp_rate) / step).floor() as i32 - 1;
-        let stop = ((self.center_freq + 0.5 * self.samp_rate) / step).ceil() as i32 + 1;
+        let minfreq = self.center_freq - 0.5 * self.samp_rate;
+        let maxfreq = self.center_freq + 0.5 * self.samp_rate;
+        let start = (minfreq / step).floor() as i32 - 1;
+        let stop = (maxfreq / step).ceil() as i32 + 1;
         let mut freqs = (start..=stop).map(|k| k as f64 * step).collect::<Vec<_>>();
         let mut nfreqs = Vec::with_capacity(max_depth + 1);
         nfreqs.push(freqs.len());
@@ -496,7 +498,20 @@ impl Waterfall {
             }
         }
 
-        // TODO: cull frequencies outside passband
+        // cull frequencies outside passband
+        let freqs_all = freqs;
+        let mut freqs = Vec::with_capacity(freqs_all.len());
+        let mut j = 0;
+        for nf in nfreqs.iter_mut() {
+            while j < *nf {
+                if freqs_all[j] > minfreq && freqs_all[j] < maxfreq {
+                    freqs.push(freqs_all[j]);
+                }
+                j += 1;
+            }
+            *nf = freqs.len();
+        }
+        drop(freqs_all);
 
         // We need to have 2 vertices per frequency for the ticks, and we cannot
         // have more than 1 << 16 vertices, since we index them with a u16.
