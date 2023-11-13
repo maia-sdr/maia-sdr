@@ -454,8 +454,8 @@ impl Waterfall {
         let boundingbox_margin_factor = 1.1;
         let width_boundingbox = boundingbox_margin_factor
             * engine.text_renderer_text_width("0000.000", TEXT_HEIGHT_PX)?;
-        let max_depth_labels = 4;
-        let max_depth = max_depth_labels + 2;
+        let mut max_depth_labels = 4;
+        let mut max_depth = max_depth_labels + 2;
 
         let s = (self.samp_rate * 0.5 * width_boundingbox as f64).log10();
         let s2 = s.ceil();
@@ -515,6 +515,24 @@ impl Waterfall {
 
         // We need to have 2 vertices per frequency for the ticks, and we cannot
         // have more than 1 << 16 vertices, since we index them with a u16.
+        //
+        // Limit depth of frequencies to guarantee that this happens. Typically,
+        // no limiting needs to be done. The limiting is only used at high resolutions.
+        if 2 * freqs.len() > (1 << 16) {
+            let (depth, ndepth) = nfreqs
+                .iter()
+                .copied()
+                .enumerate()
+                .filter(|&(_, n)| 2 * n <= 1 << 16)
+                .last()
+                .unwrap();
+            freqs.truncate(ndepth);
+            nfreqs.truncate(depth + 1);
+            max_depth = depth;
+            assert_eq!(nfreqs.len(), max_depth + 1);
+            max_depth_labels = if max_depth > 2 { max_depth - 2 } else { 1 };
+            zoom_levels.truncate(max_depth_labels);
+        }
         assert!(2 * freqs.len() <= (1 << 16));
 
         let freqs_labels = &freqs[..nfreqs[max_depth_labels - 1]];
