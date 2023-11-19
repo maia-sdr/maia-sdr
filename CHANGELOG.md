@@ -17,6 +17,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.6.1] - 2023-11-19
+
+- Bumped maia-httpd to v0.3.1. Updated dependencies.
+- Bumped maia-wasm to v0.4.1. Fixed waterfall crash.
+- Changed adi-hdl to Vivado 2022.2 branch.
+
 ## [0.6.0] - 2023-09-29
 
 - Bumped maia-hdl to v0.4.0. Added spectrometer peak detect.
