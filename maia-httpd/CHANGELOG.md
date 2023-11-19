@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.3.1 - 2023-11-19
+
+### Fixed
+
+- SigMF version format.
+
+### Changed
+
+- Updated dependencies.
+- Optimized code generation.
+
 ## 0.3.0 - 2023-09-29
 
 ### Added

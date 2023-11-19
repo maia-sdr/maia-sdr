@@ -1,6 +1,6 @@
 [package]
 name = "maia-httpd"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2021"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR HTTP server"
@@ -21,6 +21,7 @@ bytes = "1.2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4.0", features = ["derive"] }
 futures = "0.3"
+# axum still uses http 0.2 and hyper 0.14 instead of the 1.0 versions
 http = "0.2"
 hyper = "0.14"
 libc = "0.2"
