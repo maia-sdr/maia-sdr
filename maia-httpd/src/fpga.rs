@@ -138,14 +138,14 @@ impl IpCore {
         ip_core.spectrometer_integrations.set(
             ip_core
                 .registers
-                .spectrometer
+                .spectrometer()
                 .read()
                 .num_integrations()
                 .bits()
                 .into(),
         );
         ip_core.spectrometer_mode.set(
-            if ip_core.registers.spectrometer.read().peak_detect().bit() {
+            if ip_core.registers.spectrometer().read().peak_detect().bit() {
                 maia_json::SpectrometerMode::PeakDetect
             } else {
                 maia_json::SpectrometerMode::Average
@@ -156,7 +156,7 @@ impl IpCore {
     }
 
     fn version(&self) -> Version {
-        let version = self.registers.version.read();
+        let version = self.registers.version().read();
         Version {
             major: version.major().bits(),
             minor: version.minor().bits(),
@@ -177,7 +177,7 @@ impl IpCore {
 
     fn set_sdr_reset(&self, value: bool) {
         self.registers
-            .control
+            .control()
             .modify(|_, w| w.sdr_reset().bit(value))
     }
 
@@ -196,7 +196,7 @@ impl IpCore {
     /// spectrometer has written.
     pub fn spectrometer_last_buffer(&self) -> usize {
         self.registers
-            .spectrometer
+            .spectrometer()
             .read()
             .last_buffer()
             .bits()
@@ -231,13 +231,15 @@ impl IpCore {
     ///
     /// See [`IpCore::spectrometer_number_integrations`].
     pub fn set_spectrometer_number_integrations(&self, value: u32) -> Result<()> {
-        let width = maia_pac::maia_sdr::spectrometer::NUM_INTEGRATIONS_W::<0>::WIDTH;
-        if !(1..1 << width).contains(&value) {
+        const WIDTH: u8 = maia_pac::maia_sdr::spectrometer::NUM_INTEGRATIONS_W::<
+            maia_pac::maia_sdr::spectrometer::SPECTROMETER_SPEC,
+        >::WIDTH;
+        if !(1..1 << WIDTH).contains(&value) {
             anyhow::bail!("invalid number of integrations: {}", value);
         }
         unsafe {
             self.registers
-                .spectrometer
+                .spectrometer()
                 .modify(|_, w| w.num_integrations().bits(value as _))
         };
         self.spectrometer_integrations.set(value);
@@ -253,7 +255,7 @@ impl IpCore {
             maia_json::SpectrometerMode::PeakDetect => true,
         };
         self.registers
-            .spectrometer
+            .spectrometer()
             .modify(|_, w| w.peak_detect().bit(peak_detect));
         self.spectrometer_mode.set(mode);
     }
@@ -278,7 +280,7 @@ impl IpCore {
     ///
     /// This register is used to select 8-bit mode or 12-bit mode.
     pub fn recorder_mode(&self) -> maia_json::RecorderMode {
-        match self.registers.recorder_control.read().mode_8bit().bit() {
+        match self.registers.recorder_control().read().mode_8bit().bit() {
             true => maia_json::RecorderMode::IQ8bit,
             false => maia_json::RecorderMode::IQ12bit,
         }
@@ -293,7 +295,7 @@ impl IpCore {
             maia_json::RecorderMode::IQ12bit => false,
         };
         self.registers
-            .recorder_control
+            .recorder_control()
             .modify(|_, w| w.mode_8bit().bit(mode_8bit));
     }
 
@@ -304,7 +306,7 @@ impl IpCore {
     pub fn recorder_start(&self) {
         tracing::info!("starting recorder");
         self.registers
-            .recorder_control
+            .recorder_control()
             .modify(|_, w| w.start().set_bit());
     }
 
@@ -314,7 +316,7 @@ impl IpCore {
     pub fn recorder_stop(&self) {
         tracing::info!("stopping recorder");
         self.registers
-            .recorder_control
+            .recorder_control()
             .modify(|_, w| w.stop().set_bit());
     }
 
@@ -324,7 +326,7 @@ impl IpCore {
     /// would have written if it had not stopped. It can be used to calculate
     /// the size of the recording.
     pub fn recorder_next_address(&self) -> usize {
-        usize::try_from(self.registers.recorder_next_address.read().bits()).unwrap()
+        usize::try_from(self.registers.recorder_next_address().read().bits()).unwrap()
     }
 }
 
@@ -344,7 +346,7 @@ macro_rules! impl_interrupt_handler {
             async fn wait_and_notify(&mut self) -> Result<()> {
                 self.uio.irq_enable().await?;
                 self.uio.irq_wait().await?;
-                let interrupts = self.registers.interrupts.read();
+                let interrupts = self.registers.interrupts().read();
                 $(
                     if interrupts.$interrupt().bit() {
                         self.[<notify_ $interrupt>].notify_one();
