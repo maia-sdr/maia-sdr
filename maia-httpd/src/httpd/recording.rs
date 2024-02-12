@@ -3,7 +3,7 @@ use crate::fpga::{InterruptWaiter, IpCore};
 use crate::iio::Ad9361;
 use crate::sigmf;
 use anyhow::Result;
-use axum::{body::StreamBody, extract::State, Json};
+use axum::{body::Body, extract::State, Json};
 use bytes::{Bytes, BytesMut};
 use futures::Stream;
 use http::header::{HeaderMap, CONTENT_DISPOSITION, CONTENT_LENGTH};
@@ -304,7 +304,7 @@ pub type SigmfStream = ReaderStream<DuplexStream>;
 
 pub async fn get_recording(
     State(recorder): State<Recorder>,
-) -> Result<(HeaderMap, StreamBody<SigmfStream>), JsonError> {
+) -> Result<(HeaderMap, Body), JsonError> {
     let metadata = recorder.metadata.lock().await.clone();
     let max_samples = metadata.maximum_duration.map(|duration| {
         let samp_rate = metadata.sigmf_meta.sample_rate();
@@ -322,7 +322,7 @@ pub async fn get_recording(
             .unwrap(),
     );
     headers.insert(CONTENT_LENGTH, size.to_string().parse().unwrap());
-    Ok((headers, StreamBody::new(recording)))
+    Ok((headers, Body::from_stream(recording)))
 }
 
 async fn recording_stream(
