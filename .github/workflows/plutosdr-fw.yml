@@ -14,18 +14,18 @@ jobs:
     container:
       image: ghcr.io/maia-sdr/maia-sdr-devel:latest
       volumes:
-        - vivado2021_2:/opt/Xilinx
+        - vivado2022_2:/opt/Xilinx
       options: --user root
     steps:
     - name: Checkout plutosdr-fw
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         repository: maia-sdr/plutosdr-fw
         submodules: recursive
     - name: Remove maia-sdr submodule
       run: rm -rf maia-sdr
     - name: Checkout maia-sdr
-      uses: actions/checkout@v3
+      uses: actions/checkout@v4
       with:
         path: maia-sdr
         # need to fetch history to get the latest tag with git describe
@@ -40,17 +40,21 @@ jobs:
       # We cannot '.' the main settings.sh file for Vivado, because it uses
       # 'source' to run the sub-files, and we are not using bash. Instead, we
       # '.' each individual sub-file.
+      #
+      # ADI_IGNORE_VERSION_CHECK is required because we use Vivado 2022.2.2
+      # instead of 2022.2.
       run: |
-        . /opt/Xilinx/Vitis/2021.2/.settings64-Vitis.sh
-        . /opt/Xilinx/Vivado/2021.2/.settings64-Vivado.sh
-        . /opt/Xilinx/Vitis_HLS/2021.2/.settings64-Vitis_HLS.sh
+        . /opt/Xilinx/Vitis/2022.2/.settings64-Vitis.sh
+        . /opt/Xilinx/Vivado/2022.2/.settings64-Vivado.sh
+        . /opt/Xilinx/Vitis_HLS/2022.2/.settings64-Vitis_HLS.sh
         . /opt/rust/env
-        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin/:/usr/bin:/sbin:/bin:/opt/gcc-arm-linux-gnueabi/bin:$PATH:/opt/oss-cad-suite/bin
+        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin/:/usr/bin:/sbin:/bin:$PATH:/opt/oss-cad-suite/bin
         export PYTHONPATH=/usr/local/lib/python3.10/dist-packages
         apt-get update
         DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb
         Xvfb :10 &
         export DISPLAY=:10
+        export ADI_IGNORE_VERSION_CHECK=1
         make
     - name: Upload artifacts
       uses: actions/upload-artifact@v3
