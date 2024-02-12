@@ -30,7 +30,7 @@ mod zeros;
 /// server.
 #[derive(Debug)]
 pub struct Server {
-    server: axum::Server<hyper::server::conn::AddrIncoming, axum::routing::IntoMakeService<Router>>,
+    server: axum::serve::Serve<Router, Router>,
 }
 
 impl Server {
@@ -110,8 +110,8 @@ impl Server {
             .route("/zeros", get(zeros::get_zeros)) // used for benchmarking
             .fallback_service(ServeDir::new("."));
         tracing::info!(%address, "starting HTTP server");
-        let server = axum::Server::bind(address)
-            .serve(app.layer(TraceLayer::new_for_http()).into_make_service());
+        let listener = tokio::net::TcpListener::bind(address).await?;
+        let server = axum::serve(listener, app.layer(TraceLayer::new_for_http()));
         Ok(Server { server })
     }
 

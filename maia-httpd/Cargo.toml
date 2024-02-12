@@ -16,14 +16,13 @@ uclibc = []
 
 [dependencies]
 anyhow = { version = "1.0", features = ["std"] } 
-axum = { version = "0.6", features = ["default", "ws"] }
+axum = { version = "0.7.4", features = ["default", "ws"] }
 bytes = "1.2"
 chrono = { version = "0.4", default-features = false, features = ["clock"] }
 clap = { version = "4.0", features = ["derive"] }
 futures = "0.3"
-# axum still uses http 0.2 and hyper 0.14 instead of the 1.0 versions
-http = "0.2"
-hyper = "0.14"
+http = "1.0"
+hyper = "1.1"
 libc = "0.2"
 maia-json = { path = "maia-json", version = "0.3.0" }
 maia-pac = { path = "maia-pac", version = "0.3.0"  }
@@ -36,7 +35,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-tar = "0.3"
 tokio-util = { version = "0.7", features = ["full"] }
-tower-http = { version = "0.4", features = ["fs", "trace"] }
+tower-http = { version = "0.5.1", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 

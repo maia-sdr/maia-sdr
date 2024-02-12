@@ -1,11 +1,11 @@
-use axum::body::StreamBody;
+use axum::body::Body;
 use bytes::{Bytes, BytesMut};
 use futures::Stream;
 use std::pin::Pin;
 use std::task::{Context, Poll};
 
-pub async fn get_zeros() -> StreamBody<Zeros> {
-    StreamBody::new(Zeros::new())
+pub async fn get_zeros() -> Body {
+    Body::from_stream(Zeros::new())
 }
 
 pub struct Zeros {
