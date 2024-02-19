@@ -17,6 +17,8 @@ use tokio::fs;
 use tokio::io::DuplexStream;
 use tokio_util::{io::ReaderStream, sync::CancellationToken};
 
+pub mod iqengine;
+
 #[derive(Debug, Clone)]
 pub struct Recorder {
     metadata: Arc<tokio::sync::Mutex<RecordingMeta>>,
@@ -210,6 +212,13 @@ impl RecordingMeta {
         }
         true
     }
+
+    fn max_samples(&self) -> Option<usize> {
+        self.maximum_duration.map(|duration| {
+            let samp_rate = self.sigmf_meta.sample_rate();
+            (duration.as_secs_f64() * samp_rate).round() as usize
+        })
+    }
 }
 
 pub async fn recorder_json(recorder: &Recorder) -> maia_json::Recorder {
@@ -306,12 +315,8 @@ pub async fn get_recording(
     State(recorder): State<Recorder>,
 ) -> Result<(HeaderMap, Body), JsonError> {
     let metadata = recorder.metadata.lock().await.clone();
-    let max_samples = metadata.maximum_duration.map(|duration| {
-        let samp_rate = metadata.sigmf_meta.sample_rate();
-        (duration.as_secs_f64() * samp_rate).round() as usize
-    });
     let recorder_next_address = recorder.ip_core.lock().unwrap().recorder_next_address();
-    let (recording, size) = recording_stream(&metadata, recorder_next_address, max_samples)
+    let (recording, size) = recording_stream(&metadata, recorder_next_address)
         .await
         .map_err(JsonError::server_error)?;
     let mut headers = HeaderMap::new();
@@ -328,10 +333,10 @@ pub async fn get_recording(
 async fn recording_stream(
     metadata: &RecordingMeta,
     recorder_next_address: usize,
-    max_samples: Option<usize>,
 ) -> Result<(SigmfStream, usize)> {
     const DUPLEX_SIZE: usize = 1 << 20;
-    let buffer = RecordingBuffer::new(metadata.mode, recorder_next_address, max_samples).await?;
+    let buffer =
+        RecordingBuffer::new(metadata.mode, recorder_next_address, metadata.max_samples()).await?;
     let (duplex_write, duplex_read) = tokio::io::duplex(DUPLEX_SIZE);
     let stream = tokio_util::io::ReaderStream::new(duplex_read);
 
@@ -359,7 +364,7 @@ async fn recording_stream(
 
     let mut data_header = tokio_tar::Header::new_ustar();
     data_header.set_path(format!("{filename}/{filename}.sigmf-data"))?;
-    data_header.set_size(buffer.output_size().try_into().unwrap());
+    data_header.set_size(buffer.info.output_size().try_into().unwrap());
     data_header.set_mode(0o0444);
     data_header.set_entry_type(tokio_tar::EntryType::Regular);
     data_header.set_mtime(timestamp);
@@ -370,7 +375,7 @@ async fn recording_stream(
     let tar_finish_size = 1024;
     let tar_size = tar_header_size * num_headers
         + round_up_multiple_512(sigmf_meta.len())
-        + round_up_multiple_512(buffer.output_size())
+        + round_up_multiple_512(buffer.info.output_size())
         + tar_finish_size;
 
     // Write tar into the duplex concurrently
@@ -398,8 +403,13 @@ fn round_up_multiple_512(n: usize) -> usize {
 #[derive(Debug)]
 struct RecordingBuffer {
     base: *const u8,
-    size: usize,
     chunk: *const u8,
+    info: RecordingBufferInfo,
+}
+
+#[derive(Debug)]
+struct RecordingBufferInfo {
+    size: usize,
     mode: Mode,
     input_bytes_per_item: usize,
     chunk_bytes: usize,
@@ -432,6 +442,40 @@ impl RecordingBuffer {
         next_address: usize,
         max_items: Option<usize>,
     ) -> Result<RecordingBuffer> {
+        let info = RecordingBufferInfo::new(mode, next_address, max_items).await?;
+
+        let mem = fs::OpenOptions::new()
+            .read(true)
+            .open("/dev/maia-sdr-recording")
+            .await?;
+        let map = unsafe {
+            match libc::mmap(
+                std::ptr::null_mut::<libc::c_void>(),
+                info.size,
+                libc::PROT_READ,
+                libc::MAP_SHARED,
+                mem.as_raw_fd(),
+                0,
+            ) {
+                libc::MAP_FAILED => anyhow::bail!("mmap /dev/maia-sdr-recording failed"),
+                x => x,
+            }
+        };
+
+        Ok(RecordingBuffer {
+            base: map as *const u8,
+            chunk: map as *const u8,
+            info,
+        })
+    }
+}
+
+impl RecordingBufferInfo {
+    async fn new(
+        mode: RecorderMode,
+        next_address: usize,
+        max_items: Option<usize>,
+    ) -> Result<RecordingBufferInfo> {
         let base_address = usize::from_str_radix(
             fs::read_to_string(
                 "/sys/class/maia-sdr/maia-sdr-recording/device/recording_base_address",
@@ -449,28 +493,8 @@ impl RecordingBuffer {
         // Constrain size <= max_size if max_size.is_some()
         let size = max_size.map(|x| x.min(size)).unwrap_or(size);
 
-        let mem = fs::OpenOptions::new()
-            .read(true)
-            .open("/dev/maia-sdr-recording")
-            .await?;
-        let map = unsafe {
-            match libc::mmap(
-                std::ptr::null_mut::<libc::c_void>(),
-                size,
-                libc::PROT_READ,
-                libc::MAP_SHARED,
-                mem.as_raw_fd(),
-                0,
-            ) {
-                libc::MAP_FAILED => anyhow::bail!("mmap /dev/maia-sdr-recording failed"),
-                x => x,
-            }
-        };
-
-        Ok(RecordingBuffer {
-            base: map as *const u8,
+        Ok(RecordingBufferInfo {
             size,
-            chunk: map as *const u8,
             mode,
             input_bytes_per_item,
             chunk_bytes: input_bytes_per_item * Self::CHUNK_ITEMS,
@@ -481,7 +505,20 @@ impl RecordingBuffer {
         self.size / self.input_bytes_per_item * self.mode.output_bytes_per_item()
     }
 
+    fn num_items(&self) -> usize {
+        self.size / self.input_bytes_per_item
+    }
+
     const CHUNK_ITEMS: usize = 1 << 16;
+}
+
+fn unpack_12bit_to_16bit(output: &mut [u8], input: &[u8]) {
+    for (j, x) in input.chunks_exact(3).enumerate() {
+        output[4 * j] = (x[0] << 4) | (x[1] >> 4);
+        output[4 * j + 1] = ((x[0] & 0xf0) as i8 >> 4) as u8;
+        output[4 * j + 2] = x[2];
+        output[4 * j + 3] = ((x[1] << 4) as i8 >> 4) as u8;
+    }
 }
 
 impl Stream for RecordingBuffer {
@@ -489,28 +526,26 @@ impl Stream for RecordingBuffer {
 
     fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
         let offset = unsafe { self.chunk.offset_from(self.base) as usize };
-        let remaining = self.size - offset;
-        if remaining < self.input_bytes_per_item {
+        let remaining = self.info.size - offset;
+        if remaining < self.info.input_bytes_per_item {
             return Poll::Ready(None);
         }
         let (chunk_bytes, chunk_items) = match remaining {
-            x if x >= self.chunk_bytes => (self.chunk_bytes, Self::CHUNK_ITEMS),
+            x if x >= self.info.chunk_bytes => {
+                (self.info.chunk_bytes, RecordingBufferInfo::CHUNK_ITEMS)
+            }
             x => {
-                let chunk_items = x / self.input_bytes_per_item;
-                (chunk_items * self.input_bytes_per_item, chunk_items)
+                let chunk_items = x / self.info.input_bytes_per_item;
+                (chunk_items * self.info.input_bytes_per_item, chunk_items)
             }
         };
         let data = unsafe { std::slice::from_raw_parts(self.chunk, chunk_bytes) };
-        let bytes = match self.mode.0 {
+        let bytes = match self.info.mode.0 {
             RecorderMode::IQ8bit => Bytes::copy_from_slice(data),
             RecorderMode::IQ12bit => {
-                let mut bytes = BytesMut::zeroed(self.mode.output_bytes_per_item() * chunk_items);
-                for (j, x) in data.chunks(3).enumerate() {
-                    bytes[4 * j] = (x[0] << 4) | (x[1] >> 4);
-                    bytes[4 * j + 1] = ((x[0] & 0xf0) as i8 >> 4) as u8;
-                    bytes[4 * j + 2] = x[2];
-                    bytes[4 * j + 3] = ((x[1] << 4) as i8 >> 4) as u8;
-                }
+                let mut bytes =
+                    BytesMut::zeroed(self.info.mode.output_bytes_per_item() * chunk_items);
+                unpack_12bit_to_16bit(&mut bytes[..], data);
                 Bytes::from(bytes)
             }
         };
@@ -522,7 +557,7 @@ impl Stream for RecordingBuffer {
 impl Drop for RecordingBuffer {
     fn drop(&mut self) {
         unsafe {
-            libc::munmap(self.base as *mut libc::c_void, self.size);
+            libc::munmap(self.base as *mut libc::c_void, self.info.size);
         }
     }
 }
