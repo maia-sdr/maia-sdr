@@ -225,7 +225,17 @@ impl Metadata {
     ///
     /// The formatting of the JSON is compliant with the SigMF standard.
     pub fn to_json(&self) -> String {
-        let json = json!({
+        let json = self.to_json_value();
+        let mut s = serde_json::to_string_pretty(&json).unwrap();
+        s.push('\n'); // to_string_pretty does not include a final \n
+        s
+    }
+
+    /// Returns a JSON [`serde_json::Value`] that represents the metadata in JSON.
+    ///
+    /// The formatting of the JSON is compliant with the SigMF standard.
+    pub fn to_json_value(&self) -> serde_json::Value {
+        json!({
             "global": {
                 "core:datatype": self.datatype.to_string(),
                 "core:version": SIGMF_VERSION,
@@ -242,10 +252,7 @@ impl Metadata {
                 }
             ],
             "annotations": []
-        });
-        let mut s = serde_json::to_string_pretty(&json).unwrap();
-        s.push('\n'); // to_string_pretty does not include a final \n
-        s
+        })
     }
 }
 

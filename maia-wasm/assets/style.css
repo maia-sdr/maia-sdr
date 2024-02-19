@@ -240,7 +240,7 @@ input.gain {
 #recording_form input,
 #recording_form select,
 #recording_form .recording_filename_properties {
-    grid-column: 2/5;
+    grid-column: 2/6;
 }
 
 .recording_filename_properties {
@@ -253,14 +253,19 @@ input.gain {
     flex: 1;
 }
 
-#download_recording {
+#iqengine_recording {
     grid-column: 3/4;
 }
 
-#close_recording_dialog {
+#download_recording {
     grid-column: 4/5;
 }
 
+#close_recording_dialog {
+    grid-column: 5/6;
+}
+
+#iqengine_recording,
 #download_recording {
     color: var(--text-color);
     text-decoration: none;
@@ -270,6 +275,7 @@ input.gain {
     background-color: var(--button-color);
 }
 
+#iqengine_recording:hover,
 #download_recording:hover {
     background-color: var(--button-highlight-color);
 }

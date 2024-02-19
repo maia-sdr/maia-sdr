@@ -13,10 +13,14 @@ use axum::{routing::get, Router};
 use bytes::Bytes;
 use std::sync::Arc;
 use tokio::sync::broadcast;
-use tower_http::{services::ServeDir, trace::TraceLayer};
+use tower_http::{
+    services::{ServeDir, ServeFile},
+    trace::TraceLayer,
+};
 
 mod ad9361;
 mod api;
+mod iqengine;
 mod recording;
 mod spectrometer;
 mod time;
@@ -101,13 +105,31 @@ impl Server {
             )
             .route(
                 "/recording",
-                get(recording::get_recording).with_state(recorder),
+                get(recording::get_recording).with_state(recorder.clone()),
             )
             .route(
                 "/waterfall",
                 get(websocket::handler).with_state(waterfall_sender),
             )
             .route("/zeros", get(zeros::get_zeros)) // used for benchmarking
+            // IQEngine viewer for IQ recording
+            .route_service(
+                "/view/api/maiasdr/maiasdr/recording",
+                ServeFile::new("iqengine/index.html"),
+            )
+            .route(
+                "/api/datasources/maiasdr/maiasdr/recording/meta",
+                get(recording::iqengine::meta).with_state(recorder.clone()),
+            )
+            .route(
+                "/api/datasources/maiasdr/maiasdr/recording/iq-data",
+                get(recording::iqengine::iq_data).with_state(recorder.clone()),
+            )
+            .route(
+                "/api/datasources/maiasdr/maiasdr/recording/minimap-data",
+                get(recording::iqengine::minimap_data).with_state(recorder),
+            )
+            .route("/assets/:filename", get(iqengine::serve_assets))
             .fallback_service(ServeDir::new("."));
         tracing::info!(%address, "starting HTTP server");
         let listener = tokio::net::TcpListener::bind(address).await?;

@@ -742,6 +742,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b5e6163cb8c49088c2c36f57875e58ccd8c87c7427f7fbd50ea6710b2f3f2e8f"
 
 [[package]]
+name = "lz4_flex"
+version = "0.11.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "912b45c753ff5f7f5208307e8ace7d2a2e30d024e26d3509f3dce546c044ce15"
+dependencies = [
+ "twox-hash",
+]
+
+[[package]]
 name = "maia-httpd"
 version = "0.3.2"
 dependencies = [
@@ -754,8 +763,10 @@ dependencies = [
  "http",
  "hyper",
  "libc",
+ "lz4_flex",
  "maia-json",
  "maia-pac",
+ "mime_guess",
  "nix",
  "page_size",
  "paste",
@@ -1240,6 +1251,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "static_assertions"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "a2eb9349b6444b326872e140eb1cf5e7c522154d69e7a0ffb0fb81c06b37543f"
+
+[[package]]
 name = "strsim"
 version = "0.11.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1526,6 +1543,16 @@ dependencies = [
  "thiserror",
  "url",
  "utf-8",
+]
+
+[[package]]
+name = "twox-hash"
+version = "1.6.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "97fee6b57c6a41524a810daee9286c02d7752c4253064d0b05472833a438f675"
+dependencies = [
+ "cfg-if",
+ "static_assertions",
 ]
 
 [[package]]
