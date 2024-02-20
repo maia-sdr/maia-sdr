@@ -15,13 +15,18 @@ use std::task::{Context, Poll};
 use std::time::Duration;
 use tokio::fs;
 use tokio::io::DuplexStream;
+use tokio::sync::{OwnedRwLockReadGuard, OwnedRwLockWriteGuard, RwLock};
 use tokio_util::{io::ReaderStream, sync::CancellationToken};
 
 pub mod iqengine;
 
+type InProgress = Arc<tokio::sync::Mutex<Option<OwnedRwLockWriteGuard<RecordingBuffer>>>>;
+
 #[derive(Debug, Clone)]
 pub struct Recorder {
     metadata: Arc<tokio::sync::Mutex<RecordingMeta>>,
+    buffer: Arc<RwLock<RecordingBuffer>>,
+    recording_in_progress: InProgress,
     ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
     ip_core: Arc<std::sync::Mutex<IpCore>>,
 }
@@ -29,6 +34,7 @@ pub struct Recorder {
 struct FinishWaiter {
     waiter: InterruptWaiter,
     metadata: Arc<tokio::sync::Mutex<RecordingMeta>>,
+    recording_in_progress: InProgress,
 }
 
 impl Recorder {
@@ -40,10 +46,18 @@ impl Recorder {
         let metadata = Arc::new(tokio::sync::Mutex::new(
             RecordingMeta::new(&ad9361, &ip_core).await?,
         ));
-        let finish_waiter = FinishWaiter::new(Arc::clone(&metadata), interrupt_waiter);
+        let buffer = Arc::new(RwLock::new(RecordingBuffer::new().await?));
+        let recording_in_progress = Arc::new(tokio::sync::Mutex::new(None));
+        let finish_waiter = FinishWaiter::new(
+            Arc::clone(&metadata),
+            Arc::clone(&recording_in_progress),
+            interrupt_waiter,
+        );
         tokio::spawn(finish_waiter.run());
         Ok(Recorder {
             metadata,
+            buffer,
+            recording_in_progress,
             ad9361,
             ip_core,
         })
@@ -53,15 +67,28 @@ impl Recorder {
 impl FinishWaiter {
     fn new(
         metadata: Arc<tokio::sync::Mutex<RecordingMeta>>,
+        recording_in_progress: InProgress,
         waiter: InterruptWaiter,
     ) -> FinishWaiter {
-        FinishWaiter { metadata, waiter }
+        FinishWaiter {
+            metadata,
+            waiter,
+            recording_in_progress,
+        }
     }
 
     async fn run(self) -> Result<()> {
         loop {
             self.waiter.wait().await;
             tracing::info!("recorder finished");
+            {
+                let mut in_progress = self.recording_in_progress.lock().await;
+                if let Some(buffer) = in_progress.as_mut() {
+                    // mmap() the buffer again to invalidate the cache
+                    **buffer = RecordingBuffer::new().await?;
+                }
+                *in_progress = None;
+            }
             let mut metadata = self.metadata.lock().await;
             // Cancel the stop timer (perhaps it has already expired, but this
             // doesn't matter).
@@ -267,6 +294,10 @@ async fn recorder_patch(
     }
     match (patch.state_change, metadata.recorder_state) {
         (Some(maia_json::RecorderStateChange::Start), maia_json::RecorderState::Stopped) => {
+            let lock = recorder.buffer.try_write_owned().map_err(|_| {
+                anyhow::anyhow!("cannot start new recording: current recording is begin accessed")
+            })?;
+            recorder.recording_in_progress.lock().await.replace(lock);
             metadata.recorder_state = maia_json::RecorderState::Running;
             recorder.ip_core.lock().unwrap().recorder_start();
             metadata
@@ -314,9 +345,13 @@ pub type SigmfStream = ReaderStream<DuplexStream>;
 pub async fn get_recording(
     State(recorder): State<Recorder>,
 ) -> Result<(HeaderMap, Body), JsonError> {
+    let buffer = recorder
+        .buffer
+        .clone()
+        .try_read_owned()
+        .map_err(|_| JsonError::server_error(anyhow::anyhow!("recording in progress")))?;
     let metadata = recorder.metadata.lock().await.clone();
-    let recorder_next_address = recorder.ip_core.lock().unwrap().recorder_next_address();
-    let (recording, size) = recording_stream(&metadata, recorder_next_address)
+    let (recording, size) = recording_stream(buffer, &metadata, &recorder.ip_core)
         .await
         .map_err(JsonError::server_error)?;
     let mut headers = HeaderMap::new();
@@ -327,16 +362,16 @@ pub async fn get_recording(
             .unwrap(),
     );
     headers.insert(CONTENT_LENGTH, size.to_string().parse().unwrap());
-    Ok((headers, Body::from_stream(recording)))
+    Ok::<_, JsonError>((headers, Body::from_stream(recording)))
 }
 
 async fn recording_stream(
+    buffer: OwnedRwLockReadGuard<RecordingBuffer>,
     metadata: &RecordingMeta,
-    recorder_next_address: usize,
+    ip_core: &std::sync::Mutex<IpCore>,
 ) -> Result<(SigmfStream, usize)> {
     const DUPLEX_SIZE: usize = 1 << 20;
-    let buffer =
-        RecordingBuffer::new(metadata.mode, recorder_next_address, metadata.max_samples()).await?;
+    let buffer = RecordingStream::new(buffer, metadata, ip_core).await?;
     let (duplex_write, duplex_read) = tokio::io::duplex(DUPLEX_SIZE);
     let stream = tokio_util::io::ReaderStream::new(duplex_read);
 
@@ -403,129 +438,87 @@ fn round_up_multiple_512(n: usize) -> usize {
 #[derive(Debug)]
 struct RecordingBuffer {
     base: *const u8,
-    chunk: *const u8,
-    info: RecordingBufferInfo,
-}
-
-#[derive(Debug)]
-struct RecordingBufferInfo {
     size: usize,
-    mode: Mode,
-    input_bytes_per_item: usize,
-    chunk_bytes: usize,
 }
 
 unsafe impl Send for RecordingBuffer {}
-
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-struct Mode(RecorderMode);
-
-impl Mode {
-    fn input_bytes_per_item(&self) -> usize {
-        match self.0 {
-            RecorderMode::IQ8bit => 2,
-            RecorderMode::IQ12bit => 3,
-        }
-    }
-
-    fn output_bytes_per_item(&self) -> usize {
-        match self.0 {
-            RecorderMode::IQ8bit => 2,
-            RecorderMode::IQ12bit => 4,
-        }
-    }
-}
+unsafe impl Sync for RecordingBuffer {}
 
 impl RecordingBuffer {
-    async fn new(
-        mode: RecorderMode,
-        next_address: usize,
-        max_items: Option<usize>,
-    ) -> Result<RecordingBuffer> {
-        let info = RecordingBufferInfo::new(mode, next_address, max_items).await?;
-
+    async fn new() -> Result<RecordingBuffer> {
+        let size = usize::from_str_radix(
+            fs::read_to_string("/sys/class/maia-sdr/maia-sdr-recording/device/recording_size")
+                .await?
+                .trim_end()
+                .trim_start_matches("0x"),
+            16,
+        )?;
         let mem = fs::OpenOptions::new()
             .read(true)
             .open("/dev/maia-sdr-recording")
             .await?;
-        let map = unsafe {
+        // mmap()'ing the buffer can be quite expensive, because the cache is invalidated.
+        // We run it with spawn_blocking.
+        tokio::task::spawn_blocking(move || unsafe {
             match libc::mmap(
                 std::ptr::null_mut::<libc::c_void>(),
-                info.size,
+                size,
                 libc::PROT_READ,
                 libc::MAP_SHARED,
                 mem.as_raw_fd(),
                 0,
             ) {
-                libc::MAP_FAILED => anyhow::bail!("mmap /dev/maia-sdr-recording failed"),
-                x => x,
+                libc::MAP_FAILED => Err(anyhow::anyhow!("mmap /dev/maia-sdr-recording failed")),
+                x => Ok(RecordingBuffer {
+                    base: x as *const u8,
+                    size,
+                }),
             }
-        };
+        })
+        .await?
+    }
+}
 
-        Ok(RecordingBuffer {
-            base: map as *const u8,
-            chunk: map as *const u8,
+impl Drop for RecordingBuffer {
+    fn drop(&mut self) {
+        unsafe {
+            libc::munmap(self.base as *mut libc::c_void, self.size);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct RecordingStream {
+    buffer: OwnedRwLockReadGuard<RecordingBuffer>,
+    chunk: *const u8,
+    info: RecordingBufferInfo,
+}
+
+unsafe impl Send for RecordingStream {}
+
+impl RecordingStream {
+    async fn new(
+        buffer: OwnedRwLockReadGuard<RecordingBuffer>,
+        metadata: &RecordingMeta,
+        ip_core: &std::sync::Mutex<IpCore>,
+    ) -> Result<RecordingStream> {
+        let info = RecordingBufferInfo::new(metadata, ip_core).await?;
+        // chunk is a *const u8, which is not Send, so it must not be held
+        // accross an await point.
+        let chunk = buffer.base;
+        Ok(RecordingStream {
+            buffer,
+            chunk,
             info,
         })
     }
 }
 
-impl RecordingBufferInfo {
-    async fn new(
-        mode: RecorderMode,
-        next_address: usize,
-        max_items: Option<usize>,
-    ) -> Result<RecordingBufferInfo> {
-        let base_address = usize::from_str_radix(
-            fs::read_to_string(
-                "/sys/class/maia-sdr/maia-sdr-recording/device/recording_base_address",
-            )
-            .await?
-            .trim_end()
-            .trim_start_matches("0x"),
-            16,
-        )?;
-
-        let mode = Mode(mode);
-        let input_bytes_per_item = mode.input_bytes_per_item();
-        let max_size = max_items.map(|items| items * input_bytes_per_item);
-        let size = next_address - base_address;
-        // Constrain size <= max_size if max_size.is_some()
-        let size = max_size.map(|x| x.min(size)).unwrap_or(size);
-
-        Ok(RecordingBufferInfo {
-            size,
-            mode,
-            input_bytes_per_item,
-            chunk_bytes: input_bytes_per_item * Self::CHUNK_ITEMS,
-        })
-    }
-
-    fn output_size(&self) -> usize {
-        self.size / self.input_bytes_per_item * self.mode.output_bytes_per_item()
-    }
-
-    fn num_items(&self) -> usize {
-        self.size / self.input_bytes_per_item
-    }
-
-    const CHUNK_ITEMS: usize = 1 << 16;
-}
-
-fn unpack_12bit_to_16bit(output: &mut [u8], input: &[u8]) {
-    for (j, x) in input.chunks_exact(3).enumerate() {
-        output[4 * j] = (x[0] << 4) | (x[1] >> 4);
-        output[4 * j + 1] = ((x[0] & 0xf0) as i8 >> 4) as u8;
-        output[4 * j + 2] = x[2];
-        output[4 * j + 3] = ((x[1] << 4) as i8 >> 4) as u8;
-    }
-}
-
-impl Stream for RecordingBuffer {
+impl Stream for RecordingStream {
     type Item = Result<Bytes, std::io::Error>;
 
     fn poll_next(mut self: Pin<&mut Self>, _cx: &mut Context<'_>) -> Poll<Option<Self::Item>> {
-        let offset = unsafe { self.chunk.offset_from(self.base) as usize };
+        let offset = unsafe { self.chunk.offset_from(self.buffer.base) as usize };
         let remaining = self.info.size - offset;
         if remaining < self.info.input_bytes_per_item {
             return Poll::Ready(None);
@@ -554,10 +547,82 @@ impl Stream for RecordingBuffer {
     }
 }
 
-impl Drop for RecordingBuffer {
-    fn drop(&mut self) {
-        unsafe {
-            libc::munmap(self.base as *mut libc::c_void, self.info.size);
+#[derive(Debug)]
+struct RecordingBufferInfo {
+    size: usize,
+    mode: Mode,
+    input_bytes_per_item: usize,
+    chunk_bytes: usize,
+}
+
+impl RecordingBufferInfo {
+    async fn new(
+        metadata: &RecordingMeta,
+        ip_core: &std::sync::Mutex<IpCore>,
+    ) -> Result<RecordingBufferInfo> {
+        let base_address = usize::from_str_radix(
+            fs::read_to_string(
+                "/sys/class/maia-sdr/maia-sdr-recording/device/recording_base_address",
+            )
+            .await?
+            .trim_end()
+            .trim_start_matches("0x"),
+            16,
+        )?;
+        let next_address = ip_core.lock().unwrap().recorder_next_address();
+
+        let mode = Mode(metadata.mode);
+        let input_bytes_per_item = mode.input_bytes_per_item();
+        let max_size = metadata
+            .max_samples()
+            .map(|items| items * input_bytes_per_item);
+        let size = next_address - base_address;
+        // Constrain size <= max_size if max_size.is_some()
+        let size = max_size.map(|x| x.min(size)).unwrap_or(size);
+
+        Ok(RecordingBufferInfo {
+            size,
+            mode,
+            input_bytes_per_item,
+            chunk_bytes: input_bytes_per_item * Self::CHUNK_ITEMS,
+        })
+    }
+
+    fn output_size(&self) -> usize {
+        self.size / self.input_bytes_per_item * self.mode.output_bytes_per_item()
+    }
+
+    fn num_items(&self) -> usize {
+        self.size / self.input_bytes_per_item
+    }
+
+    const CHUNK_ITEMS: usize = 1 << 16;
+}
+
+#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
+struct Mode(RecorderMode);
+
+impl Mode {
+    fn input_bytes_per_item(&self) -> usize {
+        match self.0 {
+            RecorderMode::IQ8bit => 2,
+            RecorderMode::IQ12bit => 3,
         }
+    }
+
+    fn output_bytes_per_item(&self) -> usize {
+        match self.0 {
+            RecorderMode::IQ8bit => 2,
+            RecorderMode::IQ12bit => 4,
+        }
+    }
+}
+
+fn unpack_12bit_to_16bit(output: &mut [u8], input: &[u8]) {
+    for (j, x) in input.chunks_exact(3).enumerate() {
+        output[4 * j] = (x[0] << 4) | (x[1] >> 4);
+        output[4 * j + 1] = ((x[0] & 0xf0) as i8 >> 4) as u8;
+        output[4 * j + 2] = x[2];
+        output[4 * j + 3] = ((x[1] << 4) as i8 >> 4) as u8;
     }
 }

@@ -1,5 +1,5 @@
 use super::super::json_error::JsonError;
-use super::{unpack_12bit_to_16bit, Recorder, RecorderMode, RecordingBuffer, RecordingBufferInfo};
+use super::{unpack_12bit_to_16bit, Recorder, RecorderMode, RecordingBufferInfo};
 use anyhow::Result;
 use axum::extract::{Query, State};
 use bytes::{Bytes, BytesMut};
@@ -11,10 +11,7 @@ async fn get_meta(recorder: &Recorder) -> Result<serde_json::Value> {
     let mut meta = metadata.sigmf_meta.to_json_value();
 
     // compute recording length
-    let recorder_next_address = recorder.ip_core.lock().unwrap().recorder_next_address();
-    let buffer_info =
-        RecordingBufferInfo::new(metadata.mode, recorder_next_address, metadata.max_samples())
-            .await?;
+    let buffer_info = RecordingBufferInfo::new(&metadata, &recorder.ip_core).await?;
     let sample_length = buffer_info.num_items();
 
     // add traceability, which is required by IQEngine
@@ -43,27 +40,35 @@ pub async fn meta(State(recorder): State<Recorder>) -> Result<String, JsonError>
         .map(|r| serde_json::to_string(&r).unwrap())
 }
 
+fn get_buffer(
+    recorder: &Recorder,
+) -> Result<tokio::sync::RwLockReadGuard<'_, super::RecordingBuffer>> {
+    recorder
+        .buffer
+        .try_read()
+        .map_err(|_| anyhow::anyhow!("recording_in_progress"))
+}
+
 async fn get_iq_data(
     recorder: &Recorder,
     block_indexes: &[usize],
     block_size: usize,
 ) -> Result<Bytes> {
+    let buffer = get_buffer(recorder)?;
     let metadata = recorder.metadata.lock().await.clone();
-    let recorder_next_address = recorder.ip_core.lock().unwrap().recorder_next_address();
-    let buffer =
-        RecordingBuffer::new(metadata.mode, recorder_next_address, metadata.max_samples()).await?;
+    let info = RecordingBufferInfo::new(&metadata, &recorder.ip_core).await?;
 
-    let bytes_per_input = buffer.info.input_bytes_per_item;
-    let bytes_per_output = buffer.info.mode.output_bytes_per_item();
+    let bytes_per_input = info.input_bytes_per_item;
+    let bytes_per_output = info.mode.output_bytes_per_item();
     let mut bytes = BytesMut::with_capacity(block_indexes.len() * block_size * bytes_per_output);
     for &idx in block_indexes {
         let start = idx * block_size * bytes_per_input;
         let len = block_size * bytes_per_input;
-        if start + len >= buffer.info.size {
+        if start + len >= info.size {
             anyhow::bail!("requested data is out of bounds");
         }
         let data = unsafe { std::slice::from_raw_parts(buffer.base.add(start), len) };
-        match buffer.info.mode.0 {
+        match info.mode.0 {
             RecorderMode::IQ8bit => bytes.extend_from_slice(data),
             RecorderMode::IQ12bit => {
                 let len0 = bytes.len();
@@ -110,26 +115,25 @@ async fn get_minimap_data(recorder: &Recorder) -> Result<Bytes> {
     const FFT_SIZE: usize = 64;
     const NUM_FFTS: usize = 1000;
 
+    let buffer = get_buffer(recorder)?;
     let metadata = recorder.metadata.lock().await.clone();
-    let recorder_next_address = recorder.ip_core.lock().unwrap().recorder_next_address();
-    let buffer =
-        RecordingBuffer::new(metadata.mode, recorder_next_address, metadata.max_samples()).await?;
+    let info = RecordingBufferInfo::new(&metadata, &recorder.ip_core).await?;
 
-    let bytes_per_input = buffer.info.input_bytes_per_item;
-    let bytes_per_output = buffer.info.mode.output_bytes_per_item();
+    let bytes_per_input = info.input_bytes_per_item;
+    let bytes_per_output = info.mode.output_bytes_per_item();
 
-    let total_ffts = buffer.info.num_items() / FFT_SIZE;
+    let total_ffts = info.num_items() / FFT_SIZE;
 
     let mut bytes = BytesMut::with_capacity(NUM_FFTS * FFT_SIZE * bytes_per_output);
     for j in 0..NUM_FFTS {
         let idx = j * total_ffts / NUM_FFTS;
         let start = idx * FFT_SIZE * bytes_per_input;
         let len = FFT_SIZE * bytes_per_input;
-        if start + len >= buffer.info.size {
+        if start + len >= info.size {
             anyhow::bail!("requested data is out of bounds");
         }
         let data = unsafe { std::slice::from_raw_parts(buffer.base.add(start), len) };
-        match buffer.info.mode.0 {
+        match info.mode.0 {
             RecorderMode::IQ8bit => bytes.extend_from_slice(data),
             RecorderMode::IQ12bit => {
                 let len0 = bytes.len();
