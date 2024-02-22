@@ -13,11 +13,15 @@ size). Recordings can be downloaded to a smartphone or other device.
 
 See [maia-sdr.org](https://maia-sdr.org) for more details.
 
+## Installation and supported hardware
+
+See the [installation instructions](https://maia-sdr.org/installation/).
+
 ## Firmware images
 
-Stable releases of firmware images for the ADALM Pluto can be found in the
-[plutosdr-fw](https://github.com/maia-sdr/plutosdr-fw) repository. See also the
-[installation instructions](https://maia-sdr.org/installation/).
+Stable releases of firmware images for the ADALM Pluto and Pluto+ can be found
+in the [plutosdr-fw](https://github.com/maia-sdr/plutosdr-fw) repository. See
+also the [installation instructions](https://maia-sdr.org/installation/).
 
 Development ADALM Pluto firmware images for each commit and pull request are
 built automatically with Github's actions system. To download the firmware image
@@ -64,6 +68,3 @@ licensed under either of the
 [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0)
 or the MIT license at your option. maia-kmod is licensed under the
 [GPL, version 2](https://www.gnu.org/licenses/old-licenses/gpl-2.0.en.html).
-
-
-
