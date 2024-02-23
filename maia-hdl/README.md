@@ -1,20 +1,25 @@
 # maia-hdl
 
+maia-hdl is the Maia SDR FPGA Amaranth HDL code. See
+[maia-sdr.org](https://maia-sdr.org/) for a general introduction to the project,
+and also the [maia-sdr/maia-sdr](https://github.com/maia-sdr/maia-sdr) Github
+repository.
+
+The maia-hdl Python package can be used as a library of HDL modules in
+third-party HDL designs.
+
 ## Installation
 
 It is not necessary to install maia-hdl in order to generate the Vivado IP cores
-or projects, or to run the tests and simulations. These can be run as indicated
-below.
+or projects, or to run the tests and simulations. These can be run from a
+checkout of the source code as indicated below.
 
-The current checkout of this source tree can be installed with
+When using maia-hdl as a library in third-party packages, it can be installed
+with
 ```
-pip install .
+pip install maia-hdl
 ```
-
-Currently it is not possible to install maia-hdl as a Python package from
-[PyPI](https://pypi.org/), because maia-hdl depends on
-[amaranth](https://github.com/amaranth-lang/amaranth), and the latest amaranth
-package in PyPI is too old.
+or with any other method for managing Python packages.
 
 ## Building the Vivado IP cores and projects
 
