@@ -6,7 +6,7 @@ jobs:
     name: Check Python Formatting
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install pycodestyle with pip
       run: pip install pycodestyle
     - name: Run pycodestyle
@@ -19,7 +19,7 @@ jobs:
       image: ghcr.io/maia-sdr/maia-sdr-devel:latest
       options: --user root
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Run Python unittest
       run: |
         cd maia-hdl
@@ -31,7 +31,7 @@ jobs:
       image: ghcr.io/maia-sdr/maia-sdr-devel:latest
       options: --user root
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
       with:
         submodules: true
     - name: Run cocotb Makefile
