@@ -13,7 +13,7 @@ jobs:
     name: Build and test (armv7)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Format
       run: cargo fmt -- --check
     - name: Clippy
@@ -34,7 +34,7 @@ jobs:
     name: Build and test (armv7 with cross)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: Install cross
       run: cargo install cross
     - name: Install armv7-unknown-linux-gnueabihf Rust target
@@ -50,7 +50,7 @@ jobs:
     name: Build and test (x86_64)
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
+    - uses: actions/checkout@v4
     - name: cargo test
       run: cargo test --verbose
   publish:
