@@ -17,6 +17,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2024-02-23
+
+- Bumped maia-httpd to v0.4.0. Added IQEngine.
+- Bumped maia-httpd to v0.4.2. Added IQEngine.
+
 ## [0.6.1] - 2023-11-19
 
 - Bumped maia-httpd to v0.3.1. Updated dependencies.
@@ -83,7 +88,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface with real-time waterfall display and IQ recording in SigMF format to
   the Pluto RAM.
 
-[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.6.0...HEAD
+[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.6.1...v0.7.0
+[0.6.1]: https://github.com/maia-sdr/maia-sdr/compare/v0.6.0...v0.6.1
 [0.6.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.5.1...v0.6.0
 [0.5.1]: https://github.com/maia-sdr/maia-sdr/compare/v0.5.0...v0.5.1
 [0.5.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.4.0...v0.5.0
