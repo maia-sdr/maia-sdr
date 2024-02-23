@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.4.0 - 2024-02-23
+
+### Added
+
+- IQEngine backend API methods and IQEngine client serving.
+
+### Changed
+
+- Handle IQ recording mmap() as a global object instead of per request.
+
 ## 0.3.1 - 2023-11-19
 
 ### Fixed
