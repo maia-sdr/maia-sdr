@@ -155,13 +155,18 @@ impl IpCore {
         Ok((ip_core, interrupt_handler))
     }
 
-    fn version(&self) -> Version {
+    fn version_struct(&self) -> Version {
         let version = self.registers.version().read();
         Version {
             major: version.major().bits(),
             minor: version.minor().bits(),
             bugfix: version.bugfix().bits(),
         }
+    }
+
+    /// Gives the version of the IP core as a `String`.
+    pub fn version(&self) -> String {
+        format!("{}", self.version_struct())
     }
 
     fn check_product_id(&self) -> Result<()> {
@@ -184,7 +189,7 @@ impl IpCore {
     async fn log_open(&self) -> Result<()> {
         tracing::info!(
             "opened Maia SDR IP core version {} at physical address {:#08x}",
-            self.version(),
+            self.version_struct(),
             self.phys_addr
         );
         Ok(())

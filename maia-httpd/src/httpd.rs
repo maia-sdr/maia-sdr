@@ -24,6 +24,7 @@ mod iqengine;
 mod recording;
 mod spectrometer;
 mod time;
+mod version;
 mod websocket;
 mod zeros;
 
@@ -63,7 +64,7 @@ impl Server {
             recording::Recorder::new(Arc::clone(&ad9361), Arc::clone(&ip_core), waiter_recorder)
                 .await?;
         let spectrometer = spectrometer::State {
-            ip_core,
+            ip_core: Arc::clone(&ip_core),
             ad9361: Arc::clone(&ad9361),
             spectrometer_config,
         };
@@ -107,6 +108,7 @@ impl Server {
                 "/recording",
                 get(recording::get_recording).with_state(recorder.clone()),
             )
+            .route("/version", get(version::get_version).with_state(ip_core))
             .route(
                 "/waterfall",
                 get(websocket::handler).with_state(waterfall_sender),
