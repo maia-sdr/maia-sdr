@@ -20,6 +20,7 @@ pub mod colormap;
 pub mod pointer;
 pub mod render;
 pub mod ui;
+pub mod version;
 pub mod waterfall;
 pub mod waterfall_interaction;
 pub mod websocket;
