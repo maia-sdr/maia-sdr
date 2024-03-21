@@ -146,7 +146,7 @@ impl Ui {
         Ok(())
     }
 
-    impl_section!(
+    impl_section_custom_post_update!(
         spectrometer,
         maia_json::Spectrometer,
         maia_json::PatchSpectrometer,
@@ -154,6 +154,13 @@ impl Ui {
         output_sampling_frequency,
         mode
     );
+
+    fn post_update_spectrometer_elements(
+        &self,
+        json: &maia_json::Spectrometer,
+    ) -> Result<(), JsValue> {
+        self.update_waterfall_spectrometer(json)
+    }
 
     impl_section!(
         recording_metadata,
@@ -220,11 +227,11 @@ impl Ui {
     async fn get_api_update_elements(&self) -> Result<(), JsValue> {
         let json = self.get_api().await?;
         self.update_ad9361_inactive_elements(&json.ad9361)?;
-        self.update_spectrometer_inactive_elements(&json.spectrometer);
+        self.update_spectrometer_inactive_elements(&json.spectrometer)?;
         self.update_waterfall_rate(&json.spectrometer);
         self.update_recorder_button(&json.recorder);
-        self.update_recording_metadata_inactive_elements(&json.recording_metadata);
-        self.update_recorder_inactive_elements(&json.recorder);
+        self.update_recording_metadata_inactive_elements(&json.recording_metadata)?;
+        self.update_recorder_inactive_elements(&json.recorder)?;
 
         // This potentially takes some time to complete, since it might have to
         // do a fetch call to PATCH the server time. We do this last.
@@ -272,32 +279,17 @@ impl Ui {
         Ok(())
     }
 
-    fn update_ad9361_inactive_elements(&self, json: &maia_json::Ad9361) -> Result<(), JsValue> {
-        set_values_if_inactive!(
-            self,
-            json,
-            ad9361,
-            rx_lo_frequency,
-            sampling_frequency,
-            rx_rf_bandwidth,
-            rx_gain,
-            rx_gain_mode
-        );
-        self.update_rx_gain_disabled_status(json);
-        self.update_waterfall_ad9361(json)
-    }
+    impl_update_elements!(
+        ad9361,
+        maia_json::Ad9361,
+        rx_lo_frequency,
+        sampling_frequency,
+        rx_rf_bandwidth,
+        rx_gain,
+        rx_gain_mode
+    );
 
-    fn update_ad9361_all_elements(&self, json: &maia_json::Ad9361) -> Result<(), JsValue> {
-        set_values!(
-            self,
-            json,
-            ad9361,
-            rx_lo_frequency,
-            sampling_frequency,
-            rx_rf_bandwidth,
-            rx_gain,
-            rx_gain_mode
-        );
+    fn post_update_ad9361_elements(&self, json: &maia_json::Ad9361) -> Result<(), JsValue> {
         self.update_rx_gain_disabled_status(json);
         self.update_waterfall_ad9361(json)
     }
@@ -313,9 +305,23 @@ impl Ui {
     }
 
     fn update_waterfall_ad9361(&self, json: &maia_json::Ad9361) -> Result<(), JsValue> {
-        self.waterfall.borrow_mut().set_freq_samprate(
+        // updates only the LO frequency
+        let mut waterfall = self.waterfall.borrow_mut();
+        let samp_rate = waterfall.get_freq_samprate().1;
+        waterfall.set_freq_samprate(
             json.rx_lo_frequency as f64,
-            f64::from(json.sampling_frequency),
+            samp_rate,
+            &mut self.render_engine.borrow_mut(),
+        )
+    }
+
+    fn update_waterfall_spectrometer(&self, json: &maia_json::Spectrometer) -> Result<(), JsValue> {
+        // updates only the sample rate
+        let mut waterfall = self.waterfall.borrow_mut();
+        let freq = waterfall.get_freq_samprate().0;
+        waterfall.set_freq_samprate(
+            freq,
+            json.input_sampling_frequency,
             &mut self.render_engine.borrow_mut(),
         )
     }

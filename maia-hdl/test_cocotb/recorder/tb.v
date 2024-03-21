@@ -1,5 +1,5 @@
 //
-// Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+// Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 //
 // This file is part of maia-sdr
 //
@@ -14,10 +14,10 @@ module tb
    input wire         rst,
    input wire         iq_clk,
    input wire         iq_rst,
-   input wire [11:0]  re_in,
-   input wire [11:0]  im_in,
+   input wire [15:0]  re_in,
+   input wire [15:0]  im_in,
    input wire         strobe_in,
-   input wire         mode_8bit,
+   input wire [1:0]   mode,
    output wire        dropped_samples,
    output wire [31:0] next_address,
    input wire         start,
@@ -54,7 +54,7 @@ module tb
    dut dut
      (.clk(clk), .rst(rst), .iq_clk(iq_clk), .iq_rst(iq_rst),
       .re_in(re_in), .im_in(im_in), .strobe_in(strobe_in),
-      .mode_8bit(mode_8bit), .dropped_samples(dropped_samples), .start(start),
+      .mode(mode), .dropped_samples(dropped_samples), .start(start),
       .stop(stop), .finished(finished), .next_address(next_address),
       .awaddr(AWADDR), .awlen(AWLEN), .awsize(AWSIZE), .awburst(AWBURST),
       .awcache(AWCACHE), .awprot(AWPROT), .awvalid(AWVALID), .awready(AWREADY),

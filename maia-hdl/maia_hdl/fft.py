@@ -845,13 +845,21 @@ class Twiddle(Elaboratable):
         self.im_out = Signal(signed(self.outw), reset_less=True)
         self.storage = (
             storage if storage != 'auto' else self.auto_storage_rule())
+        cmult_opts = {
+            'a_width': self.sw,
+            'b_width': self.tw,
+            'truncate': self.twiddle_scale_clog2(),
+        }
+        self.cmult = (
+            Cmult3x(self._3x, **cmult_opts) if self.cmult3x
+            else Cmult(**cmult_opts))
 
     @property
     def delay(self):
-        # This is simply the delay of a Cmult3x() + 2 or a Cmult(), but we
-        # haven't built an instance yet to ask it. (here the +2 comes from the
-        # fact that we register the input and outputs of the Cmult3x).
-        return 2 + 2 if self.cmult3x else 6
+        # This is simply the delay of a Cmult3x() + 2 or a Cmult() (here the +2
+        # comes from the fact that we register the input and outputs of the
+        # Cmult3x).
+        return 2 + self.cmult.delay if self.cmult3x else self.cmult.delay
 
     @property
     def twiddle_index_advance(self):
@@ -968,14 +976,7 @@ class Twiddle(Elaboratable):
             m.d.comb += rdport.en.eq(self.clken)
         else:
             twiddle_mem_out = rdport.data
-        cmult_opts = {
-            'a_width': self.sw,
-            'b_width': self.tw,
-            'truncate': self.twiddle_scale_clog2(),
-        }
-        m.submodules.cmult = cmult = (
-            Cmult3x(self._3x, **cmult_opts) if self.cmult3x
-            else Cmult(**cmult_opts))
+        m.submodules.cmult = cmult = self.cmult
         if self.cmult3x:
             m.d.comb += cmult.common_edge.eq(self.common_edge)
             # In this case we register the inputs and outputs of the cmult3x

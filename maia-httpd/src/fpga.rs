@@ -6,7 +6,6 @@
 use crate::rxbuffer::RxBuffer;
 use crate::uio::{Mapping, Uio};
 use anyhow::{Context, Result};
-use std::cell::Cell;
 use std::sync::Arc;
 use tokio::sync::Notify;
 
@@ -22,8 +21,11 @@ pub struct IpCore {
     // RAM-based cache for the number of spectrometer integrations and
     // mode. These are used to speed up IpCore::spectrometer_number_integrations
     // and IpCore::spectrometer_mode by avoiding to read the FPGA register.
-    spectrometer_integrations: Cell<u32>,
-    spectrometer_mode: Cell<maia_json::SpectrometerMode>,
+    spectrometer_integrations: u32,
+    spectrometer_mode: maia_json::SpectrometerMode,
+    spectrometer_input: maia_json::SpectrometerInput,
+    // RAM-based cache for DDC configuration
+    ddc_config: maia_json::DDCConfig,
 }
 
 /// Interrupt waiter.
@@ -99,6 +101,102 @@ impl std::ops::Deref for Registers {
 
 unsafe impl Send for Registers {}
 
+fn default_ddc_config() -> maia_json::DDCConfig {
+    maia_json::DDCConfig {
+        fir1: maia_json::DDCFIRConfig {
+            coefficients: vec![0],
+            decimation: 2,
+        },
+        fir2: None,
+        fir3: None,
+    }
+}
+
+macro_rules! impl_set_ddc_fir {
+    ($func:ident, $addr_offset:expr, $do_fold:expr, $decimation_reg:ident, $op_reg:ident, $odd_reg:ident) => {
+        fn $func(&self, coefficients: &[i32], decimation: usize) -> Result<()> {
+            const MIN_COEFF: i32 = -(1 << 17);
+            const MAX_COEFF: i32 = (1 << 17) - 1;
+            if coefficients
+                .iter()
+                .any(|c| !(MIN_COEFF..=MAX_COEFF).contains(c))
+            {
+                anyhow::bail!("FIR coefficient out of range");
+            }
+            const MAX_DECIM: usize = (1 << 7) - 1;
+            if !(2..=MAX_DECIM).contains(&decimation) {
+                anyhow::bail!("decimation out of range");
+            }
+            if coefficients.is_empty() {
+                anyhow::bail!("no coefficients specified");
+            }
+            // Pretend that the coefficient list length is divisibly by decimation
+            // by "virtually" extending the list with zeros.
+            let operations = (coefficients.len() + decimation - 1) / decimation;
+            let odd_operations = operations % 2 == 1;
+            let operations = if $do_fold {
+                (operations + 1) / 2
+            } else {
+                operations
+            };
+            const MAX_OPERATIONS: usize = 1 << 7;
+            if operations > MAX_OPERATIONS {
+                anyhow::bail!("coefficient list too long (too many operations)");
+            }
+            // TODO: check that operations is okay with input sample rate
+
+            // See test_fir.py in maia-hdl for FIR addressing details
+            const ADDR_OFFSET: usize = $addr_offset;
+            const NUM_ADDR: usize = if $do_fold { 256 } else { 128 };
+            if operations * decimation > NUM_ADDR {
+                anyhow::bail!("coefficient list too long (does not fit in BRAM)");
+            }
+            for addr in 0..NUM_ADDR {
+                let (off, fold) = if $do_fold && addr >= NUM_ADDR / 2 {
+                    (1, NUM_ADDR / 2)
+                } else {
+                    (0, 0)
+                };
+                let k = (addr - fold) / operations;
+                let coeff = if k >= decimation {
+                    0
+                } else {
+                    let j = (addr - fold) % operations;
+                    const FOLD_MULT: usize = if $do_fold { 2 } else { 1 };
+                    let n = (FOLD_MULT * j + off) * decimation + (decimation - 1 - k);
+                    // map_or is used to "virtually" extend the coefficient list
+                    // length to a multiple of decimation.
+                    coefficients.get(n).map_or(0, |c| *c)
+                };
+                // TODO: these can be write() instead of modify() if the SVD includes reset values
+                let waddr = u16::try_from(addr + ADDR_OFFSET).unwrap();
+                self.registers
+                    .ddc_coeff_addr()
+                    .modify(|_, w| unsafe { w.coeff_waddr().bits(waddr) });
+                self.registers.ddc_coeff().modify(|_, w| unsafe {
+                    w.coeff_wren().bit(true).coeff_wdata().bits(coeff as u32)
+                });
+            }
+
+            let dec = u8::try_from(decimation).unwrap();
+            self.registers
+                .ddc_decimation()
+                .modify(|_, w| unsafe { w.$decimation_reg().bits(dec) });
+            let opm1 = u8::try_from(operations - 1).unwrap();
+            self.registers.ddc_control().modify(|_, w| unsafe {
+                let w = w.$op_reg().bits(opm1);
+                if $do_fold {
+                    w.$odd_reg().bit(odd_operations)
+                } else {
+                    w
+                }
+            });
+
+            Ok(())
+        }
+    };
+}
+
 impl IpCore {
     /// Opens the FPGA IP core.
     ///
@@ -122,35 +220,42 @@ impl IpCore {
             .await
             .context("failed to open maia-sdr-spectrometer DMA buffer")?;
         let interrupt_registers = Registers(mapping.clone());
-        let ip_core = IpCore {
+        let mut ip_core = IpCore {
             registers: Registers(mapping),
             phys_addr,
             spectrometer,
             // These are initialized to the correct value below, after removing
             // the SDR reset.
-            spectrometer_integrations: Cell::new(0),
-            spectrometer_mode: Cell::new(maia_json::SpectrometerMode::Average),
+            spectrometer_input: maia_json::SpectrometerInput::AD9361,
+            spectrometer_integrations: 0,
+            spectrometer_mode: maia_json::SpectrometerMode::Average,
+            ddc_config: default_ddc_config(),
         };
 
         ip_core.log_open().await?;
         ip_core.check_product_id()?;
         ip_core.set_sdr_reset(false);
-        ip_core.spectrometer_integrations.set(
-            ip_core
-                .registers
-                .spectrometer()
-                .read()
-                .num_integrations()
-                .bits()
-                .into(),
-        );
-        ip_core.spectrometer_mode.set(
-            if ip_core.registers.spectrometer().read().peak_detect().bit() {
-                maia_json::SpectrometerMode::PeakDetect
+        ip_core.spectrometer_integrations = ip_core
+            .registers
+            .spectrometer()
+            .read()
+            .num_integrations()
+            .bits()
+            .into();
+        // this also modifies the DDC enable
+        ip_core.set_spectrometer_input(
+            if ip_core.registers.spectrometer().read().use_ddc_out().bit() {
+                maia_json::SpectrometerInput::DDC
             } else {
-                maia_json::SpectrometerMode::Average
+                maia_json::SpectrometerInput::AD9361
             },
         );
+        ip_core.spectrometer_mode = if ip_core.registers.spectrometer().read().peak_detect().bit() {
+            maia_json::SpectrometerMode::PeakDetect
+        } else {
+            maia_json::SpectrometerMode::Average
+        };
+        ip_core.set_ddc_config(&default_ddc_config()).unwrap();
         let interrupt_handler = InterruptHandler::new(uio, interrupt_registers);
         Ok((ip_core, interrupt_handler))
     }
@@ -208,6 +313,24 @@ impl IpCore {
             .into()
     }
 
+    /// Gives the signal that is used as an input to the spectrometer.
+    pub fn spectrometer_input(&self) -> maia_json::SpectrometerInput {
+        self.spectrometer_input
+    }
+
+    /// Returns the decimation factor associated with the input to the
+    /// spectrometer.
+    ///
+    /// This decimation factor relates the AD9361 sample rate to the sample rate
+    /// used by the input of the spectrometer. The decimation factor is 1 if the
+    /// input is the AD9361, or the DDC decimation if the input is the DDC.
+    pub fn spectrometer_input_decimation(&self) -> usize {
+        match self.spectrometer_input() {
+            maia_json::SpectrometerInput::AD9361 => 1,
+            maia_json::SpectrometerInput::DDC => self.ddc_decimation(),
+        }
+    }
+
     /// Gives the value of the number of integrations register of the spectrometer.
     ///
     /// This register indicates how many FFTs are non-coherently accumulated by
@@ -217,7 +340,7 @@ impl IpCore {
     /// that it is updated, so calls to this function are very fast because the
     /// FPGA register doesn't need to be accessed.
     pub fn spectrometer_number_integrations(&self) -> u32 {
-        self.spectrometer_integrations.get()
+        self.spectrometer_integrations
     }
 
     /// Returns the current spectrometer mode.
@@ -229,13 +352,25 @@ impl IpCore {
     /// that it is updated, so calls to this function are very fast because the
     /// FPGA register doesn't need to be accessed.
     pub fn spectrometer_mode(&self) -> maia_json::SpectrometerMode {
-        self.spectrometer_mode.get()
+        self.spectrometer_mode
+    }
+
+    /// Sets the spectrometer input.
+    ///
+    /// This sets the signal that is used as an input for the spectrometer.
+    pub fn set_spectrometer_input(&mut self, input: maia_json::SpectrometerInput) {
+        let use_ddc = matches!(input, maia_json::SpectrometerInput::DDC);
+        self.registers
+            .spectrometer()
+            .modify(|_, w| w.use_ddc_out().bit(use_ddc));
+        self.set_ddc_enable(use_ddc);
+        self.spectrometer_input = input;
     }
 
     /// Sets the value of the number of integrations register of the spectrometer.
     ///
     /// See [`IpCore::spectrometer_number_integrations`].
-    pub fn set_spectrometer_number_integrations(&self, value: u32) -> Result<()> {
+    pub fn set_spectrometer_number_integrations(&mut self, value: u32) -> Result<()> {
         const WIDTH: u8 = maia_pac::maia_sdr::spectrometer::NUM_INTEGRATIONS_W::<
             maia_pac::maia_sdr::spectrometer::SPECTROMETER_SPEC,
         >::WIDTH;
@@ -247,14 +382,14 @@ impl IpCore {
                 .spectrometer()
                 .modify(|_, w| w.num_integrations().bits(value as _))
         };
-        self.spectrometer_integrations.set(value);
+        self.spectrometer_integrations = value;
         Ok(())
     }
 
     /// Sets the spectrometer mode.
     ///
     /// See [`IpCore::spectrometer_mode`].
-    pub fn set_spectrometer_mode(&self, mode: maia_json::SpectrometerMode) {
+    pub fn set_spectrometer_mode(&mut self, mode: maia_json::SpectrometerMode) {
         let peak_detect = match mode {
             maia_json::SpectrometerMode::Average => false,
             maia_json::SpectrometerMode::PeakDetect => true,
@@ -262,7 +397,7 @@ impl IpCore {
         self.registers
             .spectrometer()
             .modify(|_, w| w.peak_detect().bit(peak_detect));
-        self.spectrometer_mode.set(mode);
+        self.spectrometer_mode = mode;
     }
 
     /// Returns the new buffers that have been written by the spectrometer.
@@ -281,27 +416,132 @@ impl IpCore {
             })
     }
 
+    fn set_ddc_enable(&self, enable: bool) {
+        self.registers
+            .ddc_control()
+            .modify(|_, w| w.enable_input().bit(enable));
+    }
+
+    /// Gives the current configuration of the DDC.
+    pub fn ddc_config(&self) -> &maia_json::DDCConfig {
+        &self.ddc_config
+    }
+
+    /// Sets the configuration of the DDC.
+    ///
+    /// Setting the DDC configuration can fail if the parameters are out of
+    /// range for the capabilities of the DDC (for instance, if too many FIR
+    /// coefficients have been specified). If setting the configuration fails
+    /// mid-way, this function tries to revert to the previous configuration in
+    /// order to leave the DDC with a consistent configuration.
+    pub fn set_ddc_config(&mut self, config: &maia_json::DDCConfig) -> Result<()> {
+        if let Err(e) = self.try_set_ddc_config(config) {
+            // revert DDC config; this should not fail, since the
+            // configuration was previously set successfully
+            if let Err(err) = self.try_set_ddc_config(&self.ddc_config) {
+                tracing::error!("error reverting DDC configuration: {err}");
+            }
+            Err(e)
+        } else {
+            // save DDC config
+            self.ddc_config.clone_from(config);
+            Ok(())
+        }
+    }
+
+    fn try_set_ddc_config(&self, config: &maia_json::DDCConfig) -> Result<()> {
+        self.set_ddc_fir1(&config.fir1.coefficients, config.fir1.decimation)?;
+        if let Some(config) = &config.fir2 {
+            self.set_ddc_fir2(&config.coefficients, config.decimation)?;
+        }
+        if let Some(config) = &config.fir3 {
+            self.set_ddc_fir3(&config.coefficients, config.decimation)?;
+        }
+        self.registers.ddc_control().modify(|_, w| {
+            w.bypass2()
+                .bit(config.fir2.is_none())
+                .bypass3()
+                .bit(config.fir3.is_none())
+        });
+        Ok(())
+    }
+
+    impl_set_ddc_fir!(
+        set_ddc_fir1,
+        0,
+        true,
+        decimation1,
+        operations_minus_one1,
+        odd_operations1
+    );
+    // we need an odd_operations field for fir2, even though it doesn't have its
+    // own and it isn't touched
+    impl_set_ddc_fir!(
+        set_ddc_fir2,
+        256,
+        false,
+        decimation2,
+        operations_minus_one2,
+        odd_operations1
+    );
+    impl_set_ddc_fir!(
+        set_ddc_fir3,
+        512,
+        true,
+        decimation3,
+        operations_minus_one3,
+        odd_operations3
+    );
+
+    /// Gives the decimation factor set in the DDC.
+    pub fn ddc_decimation(&self) -> usize {
+        let mut decimation = self.ddc_config.fir1.decimation;
+        if let Some(config) = &self.ddc_config.fir2 {
+            decimation *= config.decimation;
+        }
+        if let Some(config) = &self.ddc_config.fir3 {
+            decimation *= config.decimation;
+        }
+        decimation
+    }
+
+    /// Returns the decimation factor associated with the input to the
+    /// recorder.
+    ///
+    /// This decimation factor relates the AD9361 sample rate to the sample rate
+    /// used by the input of the recorder. The decimation factor is 1 if the
+    /// input is the AD9361, or the DDC decimation if the input is the DDC.
+    pub fn recorder_input_decimation(&self) -> usize {
+        // currently the recorder shares the same input as the spectrometer
+        self.spectrometer_input_decimation()
+    }
+
     /// Gives the value of the recorder mode register of the recorder.
     ///
     /// This register is used to select 8-bit mode or 12-bit mode.
-    pub fn recorder_mode(&self) -> maia_json::RecorderMode {
-        match self.registers.recorder_control().read().mode_8bit().bit() {
-            true => maia_json::RecorderMode::IQ8bit,
-            false => maia_json::RecorderMode::IQ12bit,
-        }
+    pub fn recorder_mode(&self) -> Result<maia_json::RecorderMode> {
+        Ok(
+            match self.registers.recorder_control().read().mode().bits() {
+                0 => maia_json::RecorderMode::IQ16bit,
+                1 => maia_json::RecorderMode::IQ12bit,
+                2 => maia_json::RecorderMode::IQ8bit,
+                _ => anyhow::bail!("invalid recorder mode value"),
+            },
+        )
     }
 
     /// Sets the value of the recorder mode register of the recorder.
     ///
     /// See [`IpCore::recorder_mode`].
     pub fn set_recorder_mode(&self, mode: maia_json::RecorderMode) {
-        let mode_8bit = match mode {
-            maia_json::RecorderMode::IQ8bit => true,
-            maia_json::RecorderMode::IQ12bit => false,
+        let mode = match mode {
+            maia_json::RecorderMode::IQ16bit => 0,
+            maia_json::RecorderMode::IQ12bit => 1,
+            maia_json::RecorderMode::IQ8bit => 2,
         };
         self.registers
             .recorder_control()
-            .modify(|_, w| w.mode_8bit().bit(mode_8bit));
+            .modify(|_, w| unsafe { w.mode().bits(mode) });
     }
 
     /// Starts a recording.

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -8,6 +8,46 @@
 
 from amaranth import *
 import amaranth.cli
+
+
+class Pack16IQto32(Elaboratable):
+    """Pack 16-bit IQ to 32-bit words.
+
+    The data is packed such that if the 32-bit words are written to memory as
+    little-endian, then the samples can be found in memory as interleaved
+    little-endian 16-bit I and Q samples.
+
+    Attributes
+    ----------
+    enable : Signal(), in
+        Asserted to enable the packer. When this is low, the packer is in its
+        reset state.
+    re_in : Signal(12), in
+        Input real part.
+    im_in : Signal(12), in
+        Input imaginary part.
+    strobe_in : Signal(), in
+        Asserted to indicate that a valid sample is presented at the input.
+    data_out : Signal(32), out
+        Output 32-bit word.
+    strobe_out : Signal(32), out
+        Asserted when a valid word is presented at the output.
+    """
+    def __init__(self):
+        self.enable = Signal(1)
+        self.re_in = Signal(16)
+        self.im_in = Signal(16)
+        self.strobe_in = Signal()
+        self.out = Signal(32)
+        self.strobe_out = Signal()
+
+    def elaborate(self, platform):
+        m = Module()
+        m.d.comb += [
+            self.out.eq(Cat(self.re_in, self.im_in)),
+            self.strobe_out.eq(self.strobe_in & self.enable),
+        ]
+        return m
 
 
 class Pack12IQto32(Elaboratable):

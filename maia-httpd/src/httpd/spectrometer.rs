@@ -16,14 +16,16 @@ pub struct State {
 }
 
 impl State {
-    async fn samp_rate(&self) -> Result<f64> {
+    async fn ad9361_samp_rate(&self) -> Result<f64> {
         Ok(self.ad9361.lock().await.get_sampling_frequency().await? as f64)
     }
 }
 
 pub async fn spectrometer_json(state: &State) -> Result<Spectrometer> {
-    let samp_rate = state.samp_rate().await?;
+    let ad9361_samp_rate = state.ad9361_samp_rate().await?;
     let ip_core = state.ip_core.lock().unwrap();
+    let samp_rate = ad9361_samp_rate / ip_core.spectrometer_input_decimation() as f64;
+    let input = ip_core.spectrometer_input();
     let num_integrations = ip_core.spectrometer_number_integrations();
     let mode = ip_core.spectrometer_mode();
     drop(ip_core);
@@ -31,6 +33,7 @@ pub async fn spectrometer_json(state: &State) -> Result<Spectrometer> {
         .spectrometer_config
         .set_samp_rate_mode(samp_rate as f32, mode);
     Ok(Spectrometer {
+        input,
         input_sampling_frequency: samp_rate,
         output_sampling_frequency: samp_rate / (f64::from(FFT_SIZE) * f64::from(num_integrations)),
         number_integrations: num_integrations,
@@ -53,6 +56,9 @@ pub async fn get_spectrometer(
 }
 
 async fn update_spectrometer(state: &State, patch: &PatchSpectrometer) -> Result<()> {
+    if let Some(input) = &patch.input {
+        state.ip_core.lock().unwrap().set_spectrometer_input(*input);
+    }
     if let Some(mode) = &patch.mode {
         state.ip_core.lock().unwrap().set_spectrometer_mode(*mode);
     }
@@ -69,15 +75,13 @@ async fn update_spectrometer(state: &State, patch: &PatchSpectrometer) -> Result
             output_sampling_frequency: Some(out_freq),
             ..
         } => {
-            let in_freq = state.samp_rate().await?;
+            let ad9361_samp_rate = state.ad9361_samp_rate().await?;
+            let mut ip_core = state.ip_core.lock().unwrap();
+            let in_freq = ad9361_samp_rate / ip_core.spectrometer_input_decimation() as f64;
             let num_integrations = (in_freq / (f64::from(FFT_SIZE) * *out_freq))
                 .round()
                 .clamp(1.0, f64::from(u32::MAX)) as u32;
-            state
-                .ip_core
-                .lock()
-                .unwrap()
-                .set_spectrometer_number_integrations(num_integrations)?
+            ip_core.set_spectrometer_number_integrations(num_integrations)?;
         }
         _ => {
             // No parameters were specified. We don't do anything.

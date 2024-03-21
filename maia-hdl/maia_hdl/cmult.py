@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -192,7 +192,10 @@ class Cmult3x(Elaboratable):
 
     @property
     def delay(self):
-        return 2
+        return 3 if self.needs_wide_impl() else 2
+
+    def needs_wide_impl(self):
+        return max(self.aw, self.bw) > 18
 
     def elaborate(self, platform):
         if isinstance(platform, XilinxPlatform):
@@ -200,6 +203,25 @@ class Cmult3x(Elaboratable):
 
         # Amaranth design. Vivado doesn't infer a single DSP48E1 as we want.
         m = Module()
+
+        # The wide implementation has an additional delay
+        re_a_q = Signal(signed(self.aw), reset_less=True)
+        im_a_q = Signal(signed(self.aw), reset_less=True)
+        re_b_q = Signal(signed(self.bw), reset_less=True)
+        im_b_q = Signal(signed(self.bw), reset_less=True)
+        eqs = [
+            re_a_q.eq(self.re_a),
+            im_a_q.eq(self.im_a),
+            re_b_q.eq(self.re_b),
+            im_b_q.eq(self.im_b),
+        ]
+
+        if self.needs_wide_impl():
+            with m.If(self.clken):
+                m.d.sync += eqs
+        else:
+            m.d.comb += eqs
+
         reg_a1 = Signal(signed(self.w), reset_less=True)
         reg_d = Signal(signed(self.w), reset_less=True)
         reg_ad = Signal(signed(self.w + 1), reset_less=True)
@@ -221,25 +243,25 @@ class Cmult3x(Elaboratable):
             ]
             with m.If(self.common_edge):
                 m.d[self._3x] += [
-                    reg_a1.eq(self.re_a),
-                    reg_d.eq(self.im_a),
-                    reg_b1.eq(self.im_b),
+                    reg_a1.eq(re_a_q),
+                    reg_d.eq(im_a_q),
+                    reg_b1.eq(im_b_q),
                     reg_ad.eq(reg_a1 + reg_d),
                     reg_p.eq(reg_m),
                 ]
             with m.If(common_edge_q):
                 m.d[self._3x] += [
-                    reg_a1.eq(self.re_b),
-                    reg_d.eq(self.im_b),
-                    reg_b1.eq(self.re_a),
+                    reg_a1.eq(re_b_q),
+                    reg_d.eq(im_b_q),
+                    reg_b1.eq(re_a_q),
                     reg_ad.eq(reg_a1 - reg_d),
                     reg_p.eq(reg_p + reg_m),
                 ]
             with m.If(common_edge_qq):
                 m.d[self._3x] += [
-                    reg_a1.eq(self.re_b),
-                    reg_d.eq(self.im_b),
-                    reg_b1.eq(self.im_a),
+                    reg_a1.eq(re_b_q),
+                    reg_d.eq(im_b_q),
+                    reg_b1.eq(im_a_q),
                     reg_ad.eq(reg_a1 - reg_d),
                     reg_p.eq(reg_c + reg_m),
                 ]
@@ -251,15 +273,140 @@ class Cmult3x(Elaboratable):
 
     def elaborate_xilinx(self, platform):
         # Design with an instantiated DSP48E1
+        if min(self.aw, self.bw) > 18:
+            raise ValueError('at least one operand must have 18 bits or less')
+        if max(self.aw, self.bw) > 25:
+            raise ValueError('the widest operand must have 25 bits or less')
+        if self.needs_wide_impl():
+            if min(self.aw, self.bw) > 17:
+                raise ValueError(
+                    'if there is an operand wider than 18 bits, '
+                    'the other operand must have 17 bits or less')
+            return self.elaborate_xilinx_wide(platform)
+        assert self.aw <= 18
+        assert self.bw <= 18
         m = Module()
-        port_a = Signal(signed(30), reset_less=True)
-        port_b = Signal(signed(18), reset_less=True)
-        port_d = Signal(signed(25), reset_less=True)
-        port_c = Signal(48, reset_less=True)
-        port_p = Signal(48, reset_less=True)
-        inmode = Signal(5, reset_less=True)
-        opmode = Signal(7, reset_less=True)
-        m.submodules.dsp = dsp = Instance(
+        self.instantiate_dsp48(m)
+        common_edge_q = Signal()
+        common_edge_qq = Signal()
+        with m.If(self.clken):
+            m.d[self._3x] += [
+                common_edge_q.eq(self.common_edge),
+                common_edge_qq.eq(common_edge_q),
+            ]
+            m.d.sync += self.re_out.eq(self.port_p >> self.truncate)
+            with m.If(self.common_edge):
+                m.d[self._3x] += self.im_out.eq(self.port_p >> self.truncate)
+
+        m.d.comb += [
+            self.port_c.eq(self.port_p),
+        ]
+        with m.If(self.common_edge):
+            m.d.comb += [
+                self.port_d.eq(self.re_a),
+                self.port_a.eq(self.im_a),
+                self.port_b.eq(self.im_b),
+                self.opmode.eq(0b010_01_01),  # P + M
+                self.inmode.eq(0b01101),  # D - A1, B2
+            ]
+        with m.If(common_edge_q):
+            m.d.comb += [
+                self.port_d.eq(self.re_b),
+                self.port_a.eq(self.im_b),
+                self.port_b.eq(self.re_a),
+                self.opmode.eq(0b011_01_01),  # C + M
+                self.inmode.eq(0b01101),  # D - A1, B2
+            ]
+        with m.If(common_edge_qq):
+            m.d.comb += [
+                self.port_d.eq(self.re_b),
+                self.port_a.eq(self.im_b),
+                self.port_b.eq(self.im_a),
+                self.opmode.eq(0b000_01_01),  # M
+                self.inmode.eq(0b00101),  # D + A1, B2
+            ]
+        return m
+
+    def elaborate_xilinx_wide(self, platform):
+        # This is a variant for the case when one of the operands has width
+        # larger than 18 but not larger than 25. In this case the preadder
+        # cannot be used for both operands (because the B input is limited to
+        # 18 bits), so there is an external preadder for the narrower input,
+        # which is always fed in through port B.
+        assert 18 < max(self.aw, self.bw) <= 25
+        assert min(self.aw, self.bw) <= 17
+        if self.aw >= self.bw:
+            re_wide = self.re_a
+            im_wide = self.im_a
+            re_narrow = self.re_b
+            im_narrow = self.im_b
+        else:
+            re_wide = self.re_b
+            im_wide = self.im_b
+            re_narrow = self.re_a
+            im_narrow = self.im_a
+        wide_width = len(re_wide)
+        narrow_width = len(re_narrow)
+        m = Module()
+        self.instantiate_dsp48(m)
+        common_edge_q = Signal()
+        common_edge_qq = Signal()
+        with m.If(self.clken):
+            m.d[self._3x] += [
+                common_edge_q.eq(self.common_edge),
+                common_edge_qq.eq(common_edge_q),
+            ]
+            m.d.sync += self.re_out.eq(self.port_p >> self.truncate)
+            with m.If(self.common_edge):
+                m.d[self._3x] += self.im_out.eq(self.port_p >> self.truncate)
+
+        narrow_diff = Signal(signed(narrow_width + 1), reset_less=True)
+        re_wide_q = Signal(signed(wide_width), reset_less=True)
+        im_wide_q = Signal(signed(wide_width), reset_less=True)
+        re_narrow_q = Signal(signed(narrow_width), reset_less=True)
+        im_narrow_q = Signal(signed(narrow_width), reset_less=True)
+        with m.If(self.clken):
+            m.d.sync += [
+                narrow_diff.eq(re_narrow - im_narrow),
+                re_wide_q.eq(re_wide),
+                im_wide_q.eq(im_wide),
+                re_narrow_q.eq(re_narrow),
+                im_narrow_q.eq(im_narrow),
+            ]
+        m.d.comb += [
+            self.port_c.eq(self.port_p),
+            self.port_d.eq(re_wide_q),
+            self.port_a.eq(im_wide_q),
+        ]
+        with m.If(self.common_edge):
+            m.d.comb += [
+                self.port_b.eq(narrow_diff),
+                self.opmode.eq(0b010_01_01),  # P + M
+                self.inmode.eq(0b00001),  # A1, B2
+            ]
+        with m.If(common_edge_q):
+            m.d.comb += [
+                self.port_b.eq(re_narrow_q),
+                self.opmode.eq(0b011_01_01),  # C + M
+                self.inmode.eq(0b01101),  # D - A1, B2
+            ]
+        with m.If(common_edge_qq):
+            m.d.comb += [
+                self.port_b.eq(im_narrow_q),
+                self.opmode.eq(0b000_01_01),  # M
+                self.inmode.eq(0b00101),  # D + A1, B2
+            ]
+        return m
+
+    def instantiate_dsp48(self, m):
+        self.port_a = Signal(signed(30), reset_less=True)
+        self.port_b = Signal(signed(18), reset_less=True)
+        self.port_d = Signal(signed(25), reset_less=True)
+        self.port_c = Signal(48, reset_less=True)
+        self.port_p = Signal(48, reset_less=True)
+        self.inmode = Signal(5, reset_less=True)
+        self.opmode = Signal(7, reset_less=True)
+        m.submodules.dsp = self.dsp = Instance(
             'DSP48E1',
             p_A_INPUT='DIRECT',  # A port rather than ACIN
             p_B_INPUT='DIRECT',  # B port rather than BCIN
@@ -292,7 +439,7 @@ class Cmult3x(Elaboratable):
             o_CARRYOUT=Signal(4),
             o_MULTSIGNOUT=Signal(),
             o_OVERFLOW=Signal(),
-            o_P=port_p,
+            o_P=self.port_p,
             o_PATTERNBDETECT=Signal(),
             o_PATTERNDETECT=Signal(),
             o_PCOUT=Signal(48),
@@ -305,13 +452,13 @@ class Cmult3x(Elaboratable):
             i_ALUMODE=Const(0, unsigned(4)),  # Z + X + Y + CIN
             i_CARRYINSEL=Const(0, unsigned(3)),
             i_CLK=ClockSignal(self._3x),
-            i_INMODE=inmode,
-            i_OPMODE=opmode,
-            i_A=port_a,
-            i_B=port_b,
-            i_C=port_c,
+            i_INMODE=self.inmode,
+            i_OPMODE=self.opmode,
+            i_A=self.port_a,
+            i_B=self.port_b,
+            i_C=self.port_c,
             i_CARRYIN=0,
-            i_D=port_d,
+            i_D=self.port_d,
             i_CEA1=self.clken,
             i_CEA2=0,
             i_CEAD=self.clken,
@@ -335,46 +482,6 @@ class Cmult3x(Elaboratable):
             i_RSTINMODE=0,
             i_RSTM=0,
             i_RSTP=0)
-
-        common_edge_q = Signal()
-        common_edge_qq = Signal()
-        with m.If(self.clken):
-            m.d[self._3x] += [
-                common_edge_q.eq(self.common_edge),
-                common_edge_qq.eq(common_edge_q),
-            ]
-            m.d.sync += self.re_out.eq(port_p >> self.truncate)
-            with m.If(self.common_edge):
-                m.d[self._3x] += self.im_out.eq(port_p >> self.truncate)
-
-        m.d.comb += [
-            port_c.eq(port_p),
-        ]
-        with m.If(self.common_edge):
-            m.d.comb += [
-                port_d.eq(self.re_a),
-                port_a.eq(self.im_a),
-                port_b.eq(self.im_b),
-                opmode.eq(0b010_01_01),  # P + M
-                inmode.eq(0b01101),  # D - A1, B2
-            ]
-        with m.If(common_edge_q):
-            m.d.comb += [
-                port_d.eq(self.re_b),
-                port_a.eq(self.im_b),
-                port_b.eq(self.re_a),
-                opmode.eq(0b011_01_01),  # C + M
-                inmode.eq(0b01101),  # D - A1, B2
-            ]
-        with m.If(common_edge_qq):
-            m.d.comb += [
-                port_d.eq(self.re_b),
-                port_a.eq(self.im_b),
-                port_b.eq(self.im_a),
-                opmode.eq(0b000_01_01),  # M
-                inmode.eq(0b00101),  # D + A1, B2
-            ]
-        return m
 
 
 if __name__ == '__main__':

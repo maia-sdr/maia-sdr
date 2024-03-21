@@ -10,6 +10,7 @@ VERILOG_SOURCES += dut.v
 VERILOG_SOURCES += tb.v
 VERILOG_SOURCES += ../../XilinxUnisimLibrary/verilog/src/glbl.v
 VERILOG_SOURCES += ../../XilinxUnisimLibrary/verilog/src/unisims/FIFO18E1.v
+VERILOG_SOURCES += ../../XilinxUnisimLibrary/verilog/src/unisims/DSP48E1.v
 TOPLEVEL = tb
 MODULE = test_noise_input
 

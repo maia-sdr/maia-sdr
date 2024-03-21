@@ -11,7 +11,7 @@ use std::sync::{Arc, Mutex};
 use tokio::sync::broadcast;
 
 // Used to obtain values in dB which are positive
-const BASE_SCALE: f32 = 1e9;
+const BASE_SCALE: f32 = 4e6;
 
 /// Spectrometer.
 ///
@@ -95,17 +95,29 @@ impl Spectrometer {
                 if self.sender.receiver_count() > 0 {
                     // It is ok if send returns Err, because there might be
                     // no receiver handles in this moment.
-                    let _ = self.sender.send(Self::buffer_u64_to_f32(buffer, scale));
+                    let _ = self.sender.send(Self::buffer_u64fp_to_f32(buffer, scale));
                 }
             }
         }
     }
 
-    fn buffer_u64_to_f32(buffer: &[u64], scale: f32) -> Bytes {
+    fn buffer_u64fp_to_f32(buffer: &[u64], scale: f32) -> Bytes {
+        // The spectrometer output is in "floating point" format with an
+        // exponent that occupies the 8 MSBs of the 64 value and represents
+        // powers of 4, and a mantissa that occupies the LSBs. The way to parse
+        // this representation is to separate the exponent and the mantissa and
+        // to shift left the mantissa by 2 times the exponent places.
+
         // TODO: optimize using Neon
         buffer
             .iter()
-            .flat_map(|&x| (x as f32 * scale).to_ne_bytes().into_iter())
+            .flat_map(|&x| {
+                let exponent = (x >> 56) as u8;
+                let value = x & ((1u64 << 56) - 1);
+                let y = value << (2 * exponent);
+                let z = y as f32 * scale;
+                z.to_ne_bytes().into_iter()
+            })
             .collect()
     }
 }
