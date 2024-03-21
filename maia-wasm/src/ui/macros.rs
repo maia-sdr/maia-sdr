@@ -130,7 +130,7 @@ macro_rules! set_values {
 macro_rules! impl_update_elements {
     ($name:ident, $json:ty, $($element:ident),*) => {
         paste::paste! {
-            fn [<update_ $name _inactive_elements>](&self, json: &$json) {
+            fn [<update_ $name _inactive_elements>](&self, json: &$json) -> Result<(), JsValue> {
                 set_values_if_inactive!(
                     self,
                     json,
@@ -139,9 +139,10 @@ macro_rules! impl_update_elements {
                         $element
                     ),*
                 );
+                self.[<post_update_ $name _elements>](json)
             }
 
-            fn [<update_ $name _all_elements>](&self, json: &$json) {
+            fn [<update_ $name _all_elements>](&self, json: &$json) -> Result<(), JsValue> {
                 set_values!(
                     self,
                     json,
@@ -150,12 +151,25 @@ macro_rules! impl_update_elements {
                         $element
                     ),*
                 );
+                self.[<post_update_ $name _elements>](json)
             }
         }
     }
 }
 
 macro_rules! impl_section {
+    ($name:ident, $json:ty, $patch_json:ty, $url:expr, $($element:ident),*) => {
+        paste::paste! {
+            fn [<post_update_ $name _elements>](&self, _json: &$json) -> Result<(), JsValue> {
+                Ok(())
+            }
+        }
+
+        impl_section_custom_post_update!($name, $json, $patch_json, $url, $($element),*);
+    }
+}
+
+macro_rules! impl_section_custom_post_update {
     ($name:ident, $json:ty, $patch_json:ty, $url:expr, $($element:ident),*) => {
         impl_patch!($name, $patch_json, $json, $url);
 
@@ -178,7 +192,7 @@ macro_rules! impl_section {
         paste::paste! {
             async fn [<patch_ $name _update_elements>](&self, json: &$patch_json) -> Result<(), JsValue> {
                 match self.[<patch_ $name>](json).await {
-                    Ok(json_output) => self.[<update_ $name _all_elements>](&json_output),
+                    Ok(json_output) => self.[<update_ $name _all_elements>](&json_output)?,
                     Err(crate::ui::patch::PatchError::RequestFailed(_)) => {
                         // The error has already been logged by patch_$name, so we do nothing
                         // and return Ok(()) so that the promise doesn't fail.

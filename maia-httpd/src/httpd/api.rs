@@ -34,7 +34,7 @@ impl Api {
             ad9361_json(&ad9361).await
         }?;
         let spectrometer = spectrometer_json(&self.spectrometer).await?;
-        let recorder = recorder_json(&self.recorder).await;
+        let recorder = recorder_json(&self.recorder).await?;
         let recording_metadata = recording_metadata_json(&self.recorder).await;
         let time = time_json()?;
         Ok(maia_json::Api {

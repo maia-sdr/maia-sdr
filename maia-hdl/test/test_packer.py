@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -11,8 +11,50 @@ import numpy as np
 
 import unittest
 
-from maia_hdl.packer import Pack12IQto32, Pack8IQto32, PackFifoTwice
+from maia_hdl.packer import (
+    Pack16IQto32, Pack12IQto32, Pack8IQto32, PackFifoTwice)
 from .amaranth_sim import AmaranthSim
+
+
+class TestPack16IQto32(AmaranthSim):
+    def test_pack(self):
+        nsamples = 4096
+        re = np.random.randint(-2**15, 2**15, size=nsamples)
+        im = np.random.randint(-2**15, 2**15, size=nsamples)
+        dut = Pack16IQto32()
+        # we need a sequential element in the simulation
+        m = Module()
+        m.submodules.dut = dut
+        ignore = Signal()
+        m.d.sync += ignore.eq(~ignore)
+        self.dut = m
+
+        def set_input():
+            yield dut.enable.eq(1)
+            for r, i in zip(re, im):
+                while True:
+                    yield dut.re_in.eq(int(r))
+                    yield dut.im_in.eq(int(i))
+                    strobe = int(np.random.randint(2))
+                    yield dut.strobe_in.eq(strobe)
+                    yield
+                    if strobe:
+                        break
+
+        def check_output():
+            data = np.zeros(nsamples, 'uint32')
+            for j in range(data.size):
+                while True:
+                    yield
+                    if (yield dut.strobe_out):
+                        data[j] = yield dut.out
+                        break
+            data = data.view('int16')
+            for j in range(re.size):
+                self.assertEqual(re[j], data[2 * j])
+                self.assertEqual(im[j], data[2 * j + 1])
+
+        self.simulate([set_input, check_output])
 
 
 class TestPack12IQto32(AmaranthSim):

@@ -116,10 +116,21 @@ impl RecordingMeta {
         ad9361: &tokio::sync::Mutex<Ad9361>,
         ip_core: &std::sync::Mutex<IpCore>,
     ) -> Result<RecordingMeta> {
-        let mode = ip_core.lock().unwrap().recorder_mode();
+        let mode;
+        let decimation;
+        {
+            let ip_core = ip_core.lock().unwrap();
+            mode = ip_core.recorder_mode()?;
+            decimation = ip_core.recorder_input_decimation();
+        }
         let datatype = mode.into();
-        let sample_rate = ad9361.lock().await.get_sampling_frequency().await? as f64;
-        let frequency = ad9361.lock().await.get_rx_lo_frequency().await? as f64;
+        let sample_rate;
+        let frequency;
+        {
+            let ad9361 = ad9361.lock().await;
+            sample_rate = ad9361.get_sampling_frequency().await? as f64 / decimation as f64;
+            frequency = ad9361.get_rx_lo_frequency().await? as f64;
+        }
         let sigmf_meta = sigmf::Metadata::new(datatype, sample_rate, frequency);
         let filename = "recording".to_string();
         let recorder_state = maia_json::RecorderState::Stopped;
@@ -163,12 +174,16 @@ impl RecordingMeta {
         if self.prepend_timestamp {
             self.prepend_timestamp_to_filename();
         }
-        self.mode = ip_core.lock().unwrap().recorder_mode();
+        self.mode = ip_core.lock().unwrap().recorder_mode()?;
+        let decimation = ip_core.lock().unwrap().recorder_input_decimation();
         self.sigmf_meta.set_datatype(self.mode.into());
-        self.sigmf_meta
-            .set_sample_rate(ad9361.lock().await.get_sampling_frequency().await? as f64);
-        self.sigmf_meta
-            .set_frequency(ad9361.lock().await.get_rx_lo_frequency().await? as f64);
+        {
+            let ad9361 = ad9361.lock().await;
+            self.sigmf_meta
+                .set_sample_rate(ad9361.get_sampling_frequency().await? as f64 / decimation as f64);
+            self.sigmf_meta
+                .set_frequency(ad9361.get_rx_lo_frequency().await? as f64);
+        }
         Ok(())
     }
 
@@ -180,16 +195,16 @@ impl RecordingMeta {
         }
     }
 
-    fn recorder_json(&self, ip_core: &std::sync::Mutex<IpCore>) -> maia_json::Recorder {
-        maia_json::Recorder {
+    fn recorder_json(&self, ip_core: &std::sync::Mutex<IpCore>) -> Result<maia_json::Recorder> {
+        Ok(maia_json::Recorder {
             state: self.recorder_state,
-            mode: ip_core.lock().unwrap().recorder_mode(),
+            mode: ip_core.lock().unwrap().recorder_mode()?,
             prepend_timestamp: self.prepend_timestamp,
             maximum_duration: self
                 .maximum_duration
                 .map(|d| d.as_secs_f64())
                 .unwrap_or(0.0),
-        }
+        })
     }
 
     fn patch_json(&mut self, patch: maia_json::PatchRecordingMetadata) {
@@ -248,7 +263,7 @@ impl RecordingMeta {
     }
 }
 
-pub async fn recorder_json(recorder: &Recorder) -> maia_json::Recorder {
+pub async fn recorder_json(recorder: &Recorder) -> Result<maia_json::Recorder> {
     recorder
         .metadata
         .lock()
@@ -256,19 +271,23 @@ pub async fn recorder_json(recorder: &Recorder) -> maia_json::Recorder {
         .recorder_json(&recorder.ip_core)
 }
 
-pub async fn get_recorder(State(recorder): State<Recorder>) -> Json<maia_json::Recorder> {
-    Json(recorder_json(&recorder).await)
+pub async fn get_recorder(
+    State(recorder): State<Recorder>,
+) -> Result<Json<maia_json::Recorder>, JsonError> {
+    recorder_json(&recorder)
+        .await
+        .map_err(JsonError::server_error)
+        .map(Json)
 }
 
 pub async fn patch_recorder(
     State(recorder): State<Recorder>,
     Json(patch): Json<maia_json::PatchRecorder>,
 ) -> Result<Json<maia_json::Recorder>, JsonError> {
-    Ok(Json(
-        recorder_patch(recorder, patch)
-            .await
-            .map_err(JsonError::server_error)?,
-    ))
+    recorder_patch(recorder, patch)
+        .await
+        .map_err(JsonError::server_error)
+        .map(Json)
 }
 
 async fn recorder_patch(
@@ -309,7 +328,7 @@ async fn recorder_patch(
         }
         (_, _) => (),
     }
-    Ok(metadata.recorder_json(&recorder.ip_core))
+    metadata.recorder_json(&recorder.ip_core)
 }
 
 pub async fn recording_metadata_json(recorder: &Recorder) -> maia_json::RecordingMetadata {
@@ -534,7 +553,7 @@ impl Stream for RecordingStream {
         };
         let data = unsafe { std::slice::from_raw_parts(self.chunk, chunk_bytes) };
         let bytes = match self.info.mode.0 {
-            RecorderMode::IQ8bit => Bytes::copy_from_slice(data),
+            RecorderMode::IQ8bit | RecorderMode::IQ16bit => Bytes::copy_from_slice(data),
             RecorderMode::IQ12bit => {
                 let mut bytes =
                     BytesMut::zeroed(self.info.mode.output_bytes_per_item() * chunk_items);
@@ -607,13 +626,14 @@ impl Mode {
         match self.0 {
             RecorderMode::IQ8bit => 2,
             RecorderMode::IQ12bit => 3,
+            RecorderMode::IQ16bit => 4,
         }
     }
 
     fn output_bytes_per_item(&self) -> usize {
         match self.0 {
             RecorderMode::IQ8bit => 2,
-            RecorderMode::IQ12bit => 4,
+            RecorderMode::IQ12bit | RecorderMode::IQ16bit => 4,
         }
     }
 }

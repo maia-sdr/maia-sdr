@@ -159,6 +159,8 @@ impl From<Ad9361> for PatchAd9361 {
 /// contains the settings of the spectrometer (waterfall).
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct Spectrometer {
+    /// Input source.
+    pub input: SpectrometerInput,
     /// Input sampling frequency in samples per second (read-only).
     pub input_sampling_frequency: f64,
     /// Output sampling frequency in samples per second.
@@ -179,6 +181,9 @@ pub struct Spectrometer {
 /// be computed in terms of the other, only one of them should be used in the PATCH request.
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PatchSpectrometer {
+    /// Input source.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub input: Option<SpectrometerInput>,
     /// Output sampling frequency in samples per second.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub output_sampling_frequency: Option<f64>,
@@ -188,6 +193,15 @@ pub struct PatchSpectrometer {
     /// Spectrometer mode.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub mode: Option<SpectrometerMode>,
+}
+
+/// Spectrometer input source.
+#[derive(Serialize, Deserialize, Debug, Copy, Clone, Eq, PartialEq, Hash)]
+pub enum SpectrometerInput {
+    /// AD9361 IQ ADC output.
+    AD9361,
+    /// DDC output.
+    DDC,
 }
 
 /// Spectrometer mode.
@@ -206,6 +220,42 @@ pub enum SpectrometerMode {
 impl_str_conv!(SpectrometerMode,
                "Average" => Average,
                "Peak detect" => PeakDetect);
+
+/// DDC configuration GET JSON schema.
+///
+/// This JSON schema corresponds to GET requests on `/api/ddc/config`. It lists
+/// the configuration of each FIR filter in the DDC.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct DDCConfig {
+    /// Configuration of the first FIR filter.
+    pub fir1: DDCFIRConfig,
+    /// Configuration of the second FIR filter.
+    ///
+    /// This has the value `None` if the second FIR filter is bypassed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fir2: Option<DDCFIRConfig>,
+    /// Configuration of the third FIR filter.
+    ///
+    /// This has the value `None` if the third FIR filter is bypassed.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fir3: Option<DDCFIRConfig>,
+}
+
+/// DDC configuration PUT JSON schema.
+///
+/// This JSON schema corresponds to PUT requests on `/api/ddc/config`. It is
+/// used to set the coefficients for each FIR filter manually, as opposed to
+/// having maia-httpd design a filter satisfying some requirements.
+pub type PutDDCConfig = DDCConfig;
+
+/// Configuration of a FIR filter in the DDC.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
+pub struct DDCFIRConfig {
+    /// FIR filter coefficients.
+    pub coefficients: Vec<i32>,
+    /// Decimation factor.
+    pub decimation: usize,
+}
 
 /// IQ recorder JSON schema.
 ///
@@ -257,17 +307,24 @@ pub enum RecorderStateChange {
 pub enum RecorderMode {
     /// 8-bit sampling mode.
     ///
-    /// Only the 8 MSBs of the ADC data are recorded.
+    /// Only the 8 MSBs of the ADC data or the DDC output are recorded.
     IQ8bit,
     /// 12-bit sampling mode.
     ///
-    /// All the 12 bits of the ADC data are recorded.
+    /// All the 12 bits of the ADC data, or the 12 MSBs of the
+    /// 16-bit DDC output are recorded.
     IQ12bit,
+    /// 16-bit sampling mode.
+    ///
+    /// All the 16 bits of the DDC output are recorded. 12-bit ADC data is
+    /// placed on the 12 MSBs.
+    IQ16bit,
 }
 
 impl_str_conv!(RecorderMode,
                "8 bit IQ" => IQ8bit,
-               "12 bit IQ" => IQ12bit);
+               "12 bit IQ" => IQ12bit,
+               "16 bit IQ" => IQ16bit);
 
 /// IQ recorder state.
 #[derive(Serialize, Deserialize, Debug, Copy, Clone, PartialEq, Hash)]

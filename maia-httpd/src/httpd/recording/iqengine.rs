@@ -69,7 +69,7 @@ async fn get_iq_data(
         }
         let data = unsafe { std::slice::from_raw_parts(buffer.base.add(start), len) };
         match info.mode.0 {
-            RecorderMode::IQ8bit => bytes.extend_from_slice(data),
+            RecorderMode::IQ8bit | RecorderMode::IQ16bit => bytes.extend_from_slice(data),
             RecorderMode::IQ12bit => {
                 let len0 = bytes.len();
                 bytes.resize(len0 + block_size * bytes_per_output, 0);
@@ -134,7 +134,7 @@ async fn get_minimap_data(recorder: &Recorder) -> Result<Bytes> {
         }
         let data = unsafe { std::slice::from_raw_parts(buffer.base.add(start), len) };
         match info.mode.0 {
-            RecorderMode::IQ8bit => bytes.extend_from_slice(data),
+            RecorderMode::IQ8bit | RecorderMode::IQ16bit => bytes.extend_from_slice(data),
             RecorderMode::IQ12bit => {
                 let len0 = bytes.len();
                 bytes.resize(len0 + FFT_SIZE * bytes_per_output, 0);

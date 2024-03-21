@@ -20,6 +20,7 @@ use tower_http::{
 
 mod ad9361;
 mod api;
+mod ddc;
 mod iqengine;
 mod recording;
 mod spectrometer;
@@ -84,6 +85,12 @@ impl Server {
                 get(spectrometer::get_spectrometer)
                     .patch(spectrometer::patch_spectrometer)
                     .with_state(spectrometer),
+            )
+            .route(
+                "/api/ddc/config",
+                get(ddc::get_ddc_config)
+                    .put(ddc::put_ddc_config)
+                    .with_state(ip_core.clone()),
             )
             .route(
                 "/api/recorder",
