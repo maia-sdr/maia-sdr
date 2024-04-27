@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -53,9 +53,19 @@ async def test_noise_input(dut):
 
     scale = 1024
     mask = 2**12 - 1
-    rising = RisingEdge(dut.clk)
+    rising = RisingEdge(dut.sampling_clk)
+    cw_tone = False  # change to True to use CW tone instead of AWGN
+    if cw_tone:
+        phase = 0
+        freq = 0.02
     for _ in range(20000):
-        re, im = np.round(np.random.randn(2) * scale)
+        if cw_tone:
+            x = np.exp(1j*2*np.pi*phase)
+            phase = (phase + freq) % 1
+            re = np.round(x.real * (2**11 - 1))
+            im = np.round(x.imag * (2**11 - 1))
+        else:
+            re, im = np.round(np.random.randn(2) * scale)
         dut.re_in.value = int(re) & mask
         dut.im_in.value = int(im) & mask
         await rising

@@ -4,21 +4,21 @@
   <vendorID>destevez.net</vendorID>
   <name>Maia SDR</name>
   <series>Maia SDR</series>
-  <version>0.4.0</version>
+  <version>0.5.0</version>
   <description>Maia SDR IP core</description>
-  <licenseText>SPDX-License-Identifier: MIT Copyright (C) Daniel Estevez 2022-2023</licenseText>
+  <licenseText>SPDX-License-Identifier: MIT Copyright (C) Daniel Estevez 2022-2024</licenseText>
   <width>32</width>
   <size>32</size>
   <peripherals>
     <peripheral>
       <name>Maia SDR</name>
-      <version>0.4.0</version>
+      <version>0.5.0</version>
       <description>Maia SDR IP core</description>
       <baseAddress>0x00000000</baseAddress>
       <access>read-write</access>
       <addressBlock>
         <offset>0</offset>
-        <size>0x24</size>
+        <size>0x40</size>
         <usage>registers</usage>
       </addressBlock>
       <registers>
@@ -121,15 +121,15 @@
               <access>write-only</access>
             </field>
             <field>
-              <name>mode_8bit</name>
-              <description>mode_8bit</description>
-              <bitRange>[2:2]</bitRange>
+              <name>mode</name>
+              <description>mode</description>
+              <bitRange>[3:2]</bitRange>
               <access>read-write</access>
             </field>
             <field>
               <name>dropped_samples</name>
               <description>dropped_samples</description>
-              <bitRange>[3:3]</bitRange>
+              <bitRange>[4:4]</bitRange>
               <access>read-only</access>
             </field>
           </fields>
@@ -155,21 +155,163 @@
           <access>read-write</access>
           <fields>
             <field>
+              <name>use_ddc_out</name>
+              <description>use_ddc_out</description>
+              <bitRange>[0:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
               <name>num_integrations</name>
               <description>num_integrations</description>
-              <bitRange>[9:0]</bitRange>
+              <bitRange>[10:1]</bitRange>
               <access>read-write</access>
+            </field>
+            <field>
+              <name>abort</name>
+              <description>abort</description>
+              <bitRange>[11:11]</bitRange>
+              <access>write-only</access>
             </field>
             <field>
               <name>last_buffer</name>
               <description>last_buffer</description>
-              <bitRange>[12:10]</bitRange>
+              <bitRange>[14:12]</bitRange>
               <access>read-only</access>
             </field>
             <field>
               <name>peak_detect</name>
               <description>peak_detect</description>
-              <bitRange>[13:13]</bitRange>
+              <bitRange>[15:15]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>ddc_coeff_addr</name>
+          <description>ddc_coeff_addr</description>
+          <addressOffset>0x24</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>coeff_waddr</name>
+              <description>coeff_waddr</description>
+              <bitRange>[9:0]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>ddc_coeff</name>
+          <description>ddc_coeff</description>
+          <addressOffset>0x28</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>coeff_wren</name>
+              <description>coeff_wren</description>
+              <bitRange>[0:0]</bitRange>
+              <access>write-only</access>
+            </field>
+            <field>
+              <name>coeff_wdata</name>
+              <description>coeff_wdata</description>
+              <bitRange>[18:1]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>ddc_decimation</name>
+          <description>ddc_decimation</description>
+          <addressOffset>0x2c</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>decimation1</name>
+              <description>decimation1</description>
+              <bitRange>[6:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>decimation2</name>
+              <description>decimation2</description>
+              <bitRange>[12:7]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>decimation3</name>
+              <description>decimation3</description>
+              <bitRange>[19:13]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>ddc_frequency</name>
+          <description>ddc_frequency</description>
+          <addressOffset>0x30</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>frequency</name>
+              <description>frequency</description>
+              <bitRange>[27:0]</bitRange>
+              <access>read-write</access>
+            </field>
+          </fields>
+        </register>
+        <register>
+          <name>ddc_control</name>
+          <description>ddc_control</description>
+          <addressOffset>0x34</addressOffset>
+          <access>read-write</access>
+          <fields>
+            <field>
+              <name>operations_minus_one1</name>
+              <description>operations_minus_one1</description>
+              <bitRange>[6:0]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>operations_minus_one2</name>
+              <description>operations_minus_one2</description>
+              <bitRange>[12:7]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>operations_minus_one3</name>
+              <description>operations_minus_one3</description>
+              <bitRange>[19:13]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>odd_operations1</name>
+              <description>odd_operations1</description>
+              <bitRange>[20:20]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>odd_operations3</name>
+              <description>odd_operations3</description>
+              <bitRange>[21:21]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>bypass2</name>
+              <description>bypass2</description>
+              <bitRange>[22:22]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>bypass3</name>
+              <description>bypass3</description>
+              <bitRange>[23:23]</bitRange>
+              <access>read-write</access>
+            </field>
+            <field>
+              <name>enable_input</name>
+              <description>enable_input</description>
+              <bitRange>[24:24]</bitRange>
               <access>read-write</access>
             </field>
           </fields>

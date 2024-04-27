@@ -3,11 +3,11 @@ use wasm_bindgen::JsValue;
 use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, Response};
 
-pub fn json_patch<T: Serialize>(url: &str, json: &T) -> Result<Request, JsValue> {
+pub fn json_request<T: Serialize>(url: &str, json: &T, method: &str) -> Result<Request, JsValue> {
     let mut opts = RequestInit::new();
-    opts.method("PATCH");
-    let json =
-        serde_json::to_string(json).map_err(|_| "unable to format JSON for PATCH request")?;
+    opts.method(method);
+    let json = serde_json::to_string(json)
+        .map_err(|_| format!("unable to format JSON for {method} request"))?;
     opts.body(Some(&json.into()));
     let request = Request::new_with_str_and_init(url, &opts)?;
     request.headers().set("Content-Type", "application/json")?;
@@ -30,20 +30,24 @@ where
     Ok(json)
 }
 
-pub enum PatchError {
-    RequestFailed(String),
+pub enum RequestError {
+    RequestFailed(maia_json::Error),
     OtherError(JsValue),
 }
 
-impl From<JsValue> for PatchError {
-    fn from(value: JsValue) -> PatchError {
-        PatchError::OtherError(value)
+impl From<JsValue> for RequestError {
+    fn from(value: JsValue) -> RequestError {
+        RequestError::OtherError(value)
     }
 }
 
-pub fn ignore_request_failed<T>(x: Result<T, PatchError>) -> Result<(), JsValue> {
+// This utility function is useful because request errors are logged by the
+// function that does the request, so often times we want to do nothing more to
+// handle this error, but we want to handle other errors by failing a promise.
+pub fn ignore_request_failed<T>(x: Result<T, RequestError>) -> Result<Option<T>, JsValue> {
     match x {
-        Err(PatchError::OtherError(err)) => Err(err),
-        _ => Ok(()),
+        Ok(y) => Ok(Some(y)),
+        Err(RequestError::RequestFailed(_)) => Ok(None),
+        Err(RequestError::OtherError(err)) => Err(err),
     }
 }

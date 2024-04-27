@@ -1,8 +1,8 @@
 use super::json_error::JsonError;
-use crate::fpga::IpCore;
+use crate::{app::AppState, fpga::IpCore};
 use anyhow::Result;
 use axum::{extract::State, response::Html};
-use std::sync::Arc;
+use std::sync::Mutex;
 
 async fn fw_version() -> Result<String> {
     let iio_info = tokio::fs::read_to_string("/etc/libiio.ini").await?;
@@ -16,7 +16,7 @@ async fn fw_version() -> Result<String> {
     ))
 }
 
-async fn version(ip_core: &Arc<std::sync::Mutex<IpCore>>) -> Result<String> {
+async fn version(ip_core: &Mutex<IpCore>) -> Result<String> {
     Ok(format!(
         r#"<!doctype html>
 <html lang="en">
@@ -54,10 +54,8 @@ async fn version(ip_core: &Arc<std::sync::Mutex<IpCore>>) -> Result<String> {
     ))
 }
 
-pub async fn get_version(
-    State(ip_core): State<Arc<std::sync::Mutex<IpCore>>>,
-) -> Result<Html<String>, JsonError> {
-    version(&ip_core)
+pub async fn get_version(State(state): State<AppState>) -> Result<Html<String>, JsonError> {
+    version(state.ip_core())
         .await
         .map_err(JsonError::server_error)
         .map(Html)

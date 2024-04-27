@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -8,19 +8,27 @@
 
 from amaranth import *
 from amaranth.lib.cdc import FFSynchronizer, PulseSynchronizer
+from amaranth.lib import enum
 import amaranth.cli
 
 from .dma import DmaStreamWrite
 from .fifo import AsyncFifo18_36
-from .packer import Pack12IQto32, Pack8IQto32, PackFifoTwice
+from .packer import Pack16IQto32, Pack12IQto32, Pack8IQto32, PackFifoTwice
 
 
-class Recorder12IQ(Elaboratable):
-    """IQ recorder (12-bit input).
+class RecorderMode(enum.Enum, shape=2):
+    MODE_16BIT = 0
+    MODE_12BIT = 1
+    MODE_8BIT = 2
 
-    This recorder can pack 12-bit IQ into 3 bytes or drop the 4 LSBs
-    and record as 8-bit IQ. It uses a DmaStreamWrite to write to
-    RAM.
+
+class Recorder16IQ(Elaboratable):
+    """IQ recorder (16-bit input).
+
+    This recorder has a 16-bit input and support recording the full
+    16-bit, only the 12 MSBs, or only the 8 MSBs. When recording in
+    12-bit mode, each sample is packed into 3 bytes. It uses a
+    ``DmaStreamWrite`` to write to  RAM.
 
     The module has two clock domains, ``domain_in``, which corresponds
     to the input IQ samples, and ``domain_dma``, which corresponds to
@@ -47,12 +55,12 @@ class Recorder12IQ(Elaboratable):
     ----------
     strobe_in : Signal(), in
         Asserted to indicate that a valid sample is presented at the input.
-    re_in : Signal(12), in
+    re_in : Signal(16), in
         Input real part.
-    im_in : Signal(12), in
+    im_in : Signal(16), in
         Input imaginary part.
-    mode_8bit : Signal(), in
-        Controls the use of 8-bit recording mode.
+    mode : Signal(RecorderMode), in
+        Controls the recording mode.
     start : Signal(), in
        This signal should be pulsed for a clock cycle to start the recording.
        It is undefined behaviour to pulse this signal while the module is
@@ -80,11 +88,11 @@ class Recorder12IQ(Elaboratable):
 
         # domain_in
         self.strobe_in = Signal()
-        self.re_in = Signal(12)
-        self.im_in = Signal(12)
+        self.re_in = Signal(16)
+        self.im_in = Signal(16)
 
         # domain_dma
-        self.mode_8bit = Signal()
+        self.mode = Signal(RecorderMode)
         self.start = Signal()
         self.stop = Signal()
         self.finished = Signal()
@@ -99,7 +107,7 @@ class Recorder12IQ(Elaboratable):
     def ports(self):
         return [
             self.strobe_in, self.re_in, self.im_in,
-            self.mode_8bit, self.start, self.stop, self.finished,
+            self.mode.as_value(), self.start, self.stop, self.finished,
             self.dropped_samples, self.next_address,
         ] + self.dma.axi.ports()
 
@@ -108,6 +116,7 @@ class Recorder12IQ(Elaboratable):
         in_renamer = DomainRenamer({'sync': self.domain_in})
         dma_renamer = self.dma_renamer
 
+        m.submodules.pack16 = pack16 = in_renamer(Pack16IQto32())
         m.submodules.pack12 = pack12 = in_renamer(Pack12IQto32())
         m.submodules.pack8 = pack8 = in_renamer(Pack8IQto32())
         m.submodules.fifo = fifo = AsyncFifo18_36(
@@ -126,31 +135,51 @@ class Recorder12IQ(Elaboratable):
             m.d[self.domain_dma] += run.eq(0)
         m.d[self.domain_dma] += run_delay.eq(Cat(run, run_delay))
 
-        # mode_8bit, run synchronizer: domain_dma -> domain_in
+        # mode & run synchronizer: domain_dma -> domain_in
         if self.domain_in == self.domain_dma:
-            mode_8bit = self.mode_8bit
+            mode = self.mode
             run_in = run_delay[-1]
         else:
-            mode_8bit = Signal()
+            mode = Signal(RecorderMode, reset_less=True)
             run_in = Signal()
-            m.submodules.sync_mode_8bit = FFSynchronizer(
-                self.mode_8bit, mode_8bit, o_domain=self.domain_in)
+            m.submodules.sync_mode = FFSynchronizer(
+                self.mode.as_value(), mode, o_domain=self.domain_in)
             m.submodules.sync_run = FFSynchronizer(
                 run_delay[-1], run_in, o_domain=self.domain_in)
 
         # domain_in
         m.d.comb += [
-            pack12.re_in.eq(self.re_in),
-            pack12.im_in.eq(self.im_in),
+            pack16.re_in.eq(self.re_in),
+            pack16.im_in.eq(self.im_in),
+            pack16.strobe_in.eq(self.strobe_in),
+            pack16.enable.eq(run_in & (mode == RecorderMode.MODE_16BIT)),
+
+            pack12.re_in.eq(self.re_in >> 4),
+            pack12.im_in.eq(self.im_in >> 4),
             pack12.strobe_in.eq(self.strobe_in),
-            pack12.enable.eq(run_in & ~mode_8bit),
-            pack8.re_in.eq(self.re_in >> 4),
-            pack8.im_in.eq(self.im_in >> 4),
+            pack12.enable.eq(run_in & (mode == RecorderMode.MODE_12BIT)),
+
+            pack8.re_in.eq(self.re_in >> 8),
+            pack8.im_in.eq(self.im_in >> 8),
             pack8.strobe_in.eq(self.strobe_in),
-            pack8.enable.eq(run_in & mode_8bit),
-            fifo.data_in.eq(Mux(mode_8bit, pack8.out, pack12.out)),
-            fifo.wren.eq(Mux(mode_8bit, pack8.strobe_out, pack12.strobe_out)),
+            pack8.enable.eq(run_in & (mode == RecorderMode.MODE_8BIT)),
         ]
+        with m.Switch(mode):
+            with m.Case(RecorderMode.MODE_16BIT):
+                m.d.comb += [
+                    fifo.data_in.eq(pack16.out),
+                    fifo.wren.eq(pack16.strobe_out),
+                ]
+            with m.Case(RecorderMode.MODE_12BIT):
+                m.d.comb += [
+                    fifo.data_in.eq(pack12.out),
+                    fifo.wren.eq(pack12.strobe_out),
+                ]
+            with m.Case(RecorderMode.MODE_8BIT):
+                m.d.comb += [
+                    fifo.data_in.eq(pack8.out),
+                    fifo.wren.eq(pack8.strobe_out),
+                ]
         dropped = Signal()
         run_in_q = Signal()
         m.d[self.domain_in] += run_in_q.eq(run_in)
@@ -199,7 +228,7 @@ class Recorder12IQ(Elaboratable):
 
 
 if __name__ == '__main__':
-    recorder = Recorder12IQ(
+    recorder = Recorder16IQ(
         0x01100000, 0x1a000000, domain_in='iq', domain_dma='sync')
     amaranth.cli.main(
         recorder, ports=recorder.ports())

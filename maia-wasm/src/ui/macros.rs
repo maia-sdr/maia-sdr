@@ -71,24 +71,48 @@ macro_rules! set_on {
     }
 }
 
-macro_rules! impl_patch {
-    ($name:ident, $patch_json:ty, $get_json:ty, $url:expr) => {
+macro_rules! impl_request {
+    ($name:ident, $request_json:ty, $get_json:ty, $url:expr, $method_ident:ident, $method:expr) => {
         paste::paste! {
-            async fn [<patch_ $name>](&self, json: &$patch_json) -> Result<$get_json, crate::ui::patch::PatchError> {
-                let request = json_patch($url, json)?;
+            async fn [<$method_ident _ $name>](&self, json: &$request_json) -> Result<$get_json, crate::ui::request::RequestError> {
+                let method = $method;
+                let request = crate::ui::request::json_request($url, json, method)?;
                 let response = JsFuture::from(self.window.fetch_with_request(&request))
                     .await?
                     .dyn_into::<Response>()?;
                 if !response.ok() {
                     let status = response.status();
-                    let text = crate::ui::patch::response_to_string(&response).await?;
-                    web_sys::console::error_1(&format!("PATCH request failed with HTTP code {status}. \
-                                                        Server returned: {text}").into());
-                    return Err(crate::ui::patch::PatchError::RequestFailed(text));
+                    let error: maia_json::Error = crate::ui::request::response_to_json(&response).await?;
+                    match error.suggested_action {
+                        maia_json::ErrorAction::Ignore => {}
+                        maia_json::ErrorAction::Log =>
+                            web_sys::console::error_1(&format!(
+                                "{method} request failed with HTTP code {status}. \
+                                 Error description: {}", error.error_description).into()),
+                        maia_json::ErrorAction::Alert => {
+                            web_sys::console::error_1(&format!(
+                                "{method} request failed with HTTP code {status}. \
+                                 UI alert suggested. Error description: {}", error.error_description).into());
+                            self.alert(&error.error_description)?;
+                        }
+                    }
+                    return Err(crate::ui::request::RequestError::RequestFailed(error));
                 }
-                Ok(crate::ui::patch::response_to_json(&response).await?)
+                Ok(crate::ui::request::response_to_json(&response).await?)
             }
         }
+    };
+}
+
+macro_rules! impl_patch {
+    ($name:ident, $patch_json:ty, $get_json:ty, $url:expr) => {
+        impl_request!($name, $patch_json, $get_json, $url, patch, "PATCH");
+    };
+}
+
+macro_rules! impl_put {
+    ($name:ident, $put_json:ty, $get_json:ty, $url:expr) => {
+        impl_request!($name, $put_json, $get_json, $url, put, "PUT");
     };
 }
 
@@ -102,7 +126,8 @@ macro_rules! set_values_if_inactive {
                 // (rather than typing). Therefore, we update it regardless of
                 // whether it has focus.
                 if !$self.document.is_element_active(stringify!([<$section _ $element>]))
-                || $self.elements.[<$section _ $element>].type_() == "checkbox" {
+                    || std::any::Any::type_id(&$self.elements.[<$section _ $element>])
+                    == std::any::TypeId::of::<crate::ui::input::CheckboxInput>() {
                     $self.elements.[<$section _ $element>].set(&$source.$element);
                 }
                 if let Err(e) = preferences.[<update_ $section _ $element>](&$source.$element) {
@@ -130,7 +155,7 @@ macro_rules! set_values {
 macro_rules! impl_update_elements {
     ($name:ident, $json:ty, $($element:ident),*) => {
         paste::paste! {
-            fn [<update_ $name _inactive_elements>](&self, json: &$json) {
+            fn [<update_ $name _inactive_elements>](&self, json: &$json) -> Result<(), JsValue> {
                 set_values_if_inactive!(
                     self,
                     json,
@@ -139,9 +164,11 @@ macro_rules! impl_update_elements {
                         $element
                     ),*
                 );
+                self.[<post_update_ $name _elements>](json)
             }
 
-            fn [<update_ $name _all_elements>](&self, json: &$json) {
+            #[allow(dead_code)]
+            fn [<update_ $name _all_elements>](&self, json: &$json) -> Result<(), JsValue> {
                 set_values!(
                     self,
                     json,
@@ -150,12 +177,50 @@ macro_rules! impl_update_elements {
                         $element
                     ),*
                 );
+                self.[<post_update_ $name _elements>](json)
             }
         }
     }
 }
 
+macro_rules! impl_post_update_noop {
+    ($name:ident, $json:ty) => {
+        paste::paste! {
+            fn [<post_update_ $name _elements>](&self, _json: &$json) -> Result<(), JsValue> {
+                Ok(())
+            }
+        }
+    };
+}
+
+macro_rules! impl_post_patch_update_elements_noop {
+    ($name:ident, $patch_json:ty) => {
+        paste::paste! {
+            fn [<post_patch_ $name _update_elements>](&self, _json: &$patch_json) -> Result<(), JsValue> {
+                Ok(())
+            }
+        }
+    }
+}
+
+macro_rules! impl_onchange_patch_modify_noop {
+    ($name:ident, $patch_json:ty) => {
+        paste::paste! {
+            fn [<$name _onchange_patch_modify>](&self, _json: &mut $patch_json) {}
+        }
+    };
+}
+
 macro_rules! impl_section {
+    ($name:ident, $json:ty, $patch_json:ty, $url:expr, $($element:ident),*) => {
+        impl_post_update_noop!($name, $json);
+        impl_post_patch_update_elements_noop!($name, $patch_json);
+        impl_onchange_patch_modify_noop!($name, $patch_json);
+        impl_section_custom!($name, $json, $patch_json, $url, $($element),*);
+    }
+}
+
+macro_rules! impl_section_custom {
     ($name:ident, $json:ty, $patch_json:ty, $url:expr, $($element:ident),*) => {
         impl_patch!($name, $patch_json, $json, $url);
 
@@ -177,16 +242,12 @@ macro_rules! impl_section {
 
         paste::paste! {
             async fn [<patch_ $name _update_elements>](&self, json: &$patch_json) -> Result<(), JsValue> {
-                match self.[<patch_ $name>](json).await {
-                    Ok(json_output) => self.[<update_ $name _all_elements>](&json_output),
-                    Err(crate::ui::patch::PatchError::RequestFailed(_)) => {
-                        // The error has already been logged by patch_$name, so we do nothing
-                        // and return Ok(()) so that the promise doesn't fail.
+                if let Some(json_output) = crate::ui::request::ignore_request_failed(self.[<patch_ $name>](json).await)? {
+                    if let Some(state) = self.api_state.borrow_mut().as_mut() {
+                        state.$name.clone_from(&json_output);
                     }
-                    Err(crate::ui::patch::PatchError::OtherError(err)) => {
-                        // Unhandled error. Make the promise fail (eventually) with this error.
-                        return Err(err);
-                    }
+                    self.[<update_ $name _all_elements>](&json_output)?;
+                    self.[<post_patch_ $name _update_elements>](json)?;
                 }
                 Ok(())
             }
@@ -212,12 +273,39 @@ macro_rules! impl_onchange {
                                 .unwrap();
                             return JsValue::NULL;
                         };
-                        let patch = $patch_json { $element: Some(value), ..Default::default() };
+                        #[allow(clippy::needless_update)]
+                        let mut patch = $patch_json { $element: Some(value), ..Default::default() };
+                        ui.[<$name _onchange_patch_modify>](&mut patch);
                         let ui = ui.clone();
                         future_to_promise(async move {
                             ui.[<patch_ $name _update_elements>](&patch).await?;
                             Ok(JsValue::NULL)
                         }).into()
+                    })
+                }
+            )*
+        }
+    }
+}
+
+macro_rules! impl_tabs {
+    ($($element:ident),*) => {
+        paste::paste! {
+            fn hide_all_tab_panels(&self) -> Result<(), JsValue> {
+                $(
+                    self.elements.[<$element _panel>].class_list().add_1("hidden")?;
+                    self.elements.[<$element _tab>].set_attribute("aria-selected", "false")?;
+                )*
+                Ok(())
+            }
+
+            $(
+                fn [<$element _tab_onclick>](&self) -> Closure<dyn Fn()> {
+                    let ui = self.clone();
+                    Closure::new(move || {
+                        ui.hide_all_tab_panels().unwrap();
+                        ui.elements.[<$element _panel>].class_list().remove_1("hidden").unwrap();
+                        ui.elements.[<$element _tab>].set_attribute("aria-selected", "true").unwrap();
                     })
                 }
             )*

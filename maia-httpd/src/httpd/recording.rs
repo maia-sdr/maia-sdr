@@ -1,4 +1,5 @@
 use super::json_error::JsonError;
+use crate::app::AppState;
 use crate::fpga::{InterruptWaiter, IpCore};
 use crate::iio::Ad9361;
 use crate::sigmf;
@@ -20,76 +21,74 @@ use tokio_util::{io::ReaderStream, sync::CancellationToken};
 
 pub mod iqengine;
 
-type InProgress = Arc<tokio::sync::Mutex<Option<OwnedRwLockWriteGuard<RecordingBuffer>>>>;
+type InProgress = tokio::sync::Mutex<Option<OwnedRwLockWriteGuard<RecordingBuffer>>>;
 
-#[derive(Debug, Clone)]
-pub struct Recorder {
-    metadata: Arc<tokio::sync::Mutex<RecordingMeta>>,
+/// Recorder state.
+///
+/// This struct contains the state of the recorder. It is used by the REST API.
+#[derive(Debug)]
+pub struct RecorderState {
+    metadata: tokio::sync::Mutex<RecordingMeta>,
     buffer: Arc<RwLock<RecordingBuffer>>,
     recording_in_progress: InProgress,
-    ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
-    ip_core: Arc<std::sync::Mutex<IpCore>>,
 }
 
-struct FinishWaiter {
+/// Recorder finish waiter.
+///
+/// This struct implements a [`run`](RecorderFinishWaiter::run) async method
+/// that should be run concurrently with the rest of the application. The method
+/// waits until an interrupt notifying of the end of a recording is received,
+/// and then updates the recording state accordingly.
+#[derive(Debug)]
+pub struct RecorderFinishWaiter {
+    state: AppState,
     waiter: InterruptWaiter,
-    metadata: Arc<tokio::sync::Mutex<RecordingMeta>>,
-    recording_in_progress: InProgress,
 }
 
-impl Recorder {
+impl RecorderState {
+    /// Creates a new recorder state.
     pub async fn new(
-        ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
-        ip_core: Arc<std::sync::Mutex<IpCore>>,
-        interrupt_waiter: InterruptWaiter,
-    ) -> Result<Recorder> {
-        let metadata = Arc::new(tokio::sync::Mutex::new(
-            RecordingMeta::new(&ad9361, &ip_core).await?,
-        ));
+        ad9361: &tokio::sync::Mutex<Ad9361>,
+        ip_core: &std::sync::Mutex<IpCore>,
+    ) -> Result<RecorderState> {
+        let metadata = tokio::sync::Mutex::new(RecordingMeta::new(ad9361, ip_core).await?);
         let buffer = Arc::new(RwLock::new(RecordingBuffer::new().await?));
-        let recording_in_progress = Arc::new(tokio::sync::Mutex::new(None));
-        let finish_waiter = FinishWaiter::new(
-            Arc::clone(&metadata),
-            Arc::clone(&recording_in_progress),
-            interrupt_waiter,
-        );
-        tokio::spawn(finish_waiter.run());
-        Ok(Recorder {
+        let recording_in_progress = tokio::sync::Mutex::new(None);
+        Ok(RecorderState {
             metadata,
             buffer,
             recording_in_progress,
-            ad9361,
-            ip_core,
         })
     }
 }
 
-impl FinishWaiter {
-    fn new(
-        metadata: Arc<tokio::sync::Mutex<RecordingMeta>>,
-        recording_in_progress: InProgress,
-        waiter: InterruptWaiter,
-    ) -> FinishWaiter {
-        FinishWaiter {
-            metadata,
-            waiter,
-            recording_in_progress,
-        }
+impl RecorderFinishWaiter {
+    /// Creates a new recorder finish waiter.
+    ///
+    /// The `waiter` is the [`InterruptWaiter`] corresponding to the recorder
+    /// interrupt. This function only creates the object. The
+    /// [`run`](RecorderFinishWaiter) method needs to be called afterwards.
+    pub fn new(state: AppState, waiter: InterruptWaiter) -> RecorderFinishWaiter {
+        RecorderFinishWaiter { state, waiter }
     }
 
-    async fn run(self) -> Result<()> {
+    /// Runs the recorder finish waiter.
+    ///
+    /// This function loops forever, waiting for interrupts and updating the
+    /// state of the recorder. The function only returns if there is an error.
+    pub async fn run(self) -> Result<()> {
         loop {
             self.waiter.wait().await;
             tracing::info!("recorder finished");
             {
-                let mut in_progress = self.recording_in_progress.lock().await;
+                let mut in_progress = self.state.recorder().recording_in_progress.lock().await;
                 if let Some(buffer) = in_progress.as_mut() {
                     // mmap() the buffer again to invalidate the cache
                     **buffer = RecordingBuffer::new().await?;
                 }
                 *in_progress = None;
             }
-            let mut metadata = self.metadata.lock().await;
+            let mut metadata = self.state.recorder().metadata.lock().await;
             // Cancel the stop timer (perhaps it has already expired, but this
             // doesn't matter).
             if let Some(token) = metadata.stop_timer_cancellation.take() {
@@ -116,10 +115,21 @@ impl RecordingMeta {
         ad9361: &tokio::sync::Mutex<Ad9361>,
         ip_core: &std::sync::Mutex<IpCore>,
     ) -> Result<RecordingMeta> {
-        let mode = ip_core.lock().unwrap().recorder_mode();
+        let mode;
+        let decimation;
+        {
+            let ip_core = ip_core.lock().unwrap();
+            mode = ip_core.recorder_mode()?;
+            decimation = ip_core.recorder_input_decimation();
+        }
         let datatype = mode.into();
-        let sample_rate = ad9361.lock().await.get_sampling_frequency().await? as f64;
-        let frequency = ad9361.lock().await.get_rx_lo_frequency().await? as f64;
+        let sample_rate;
+        let frequency;
+        {
+            let ad9361 = ad9361.lock().await;
+            sample_rate = ad9361.get_sampling_frequency().await? as f64 / decimation as f64;
+            frequency = ad9361.get_rx_lo_frequency().await? as f64;
+        }
         let sigmf_meta = sigmf::Metadata::new(datatype, sample_rate, frequency);
         let filename = "recording".to_string();
         let recorder_state = maia_json::RecorderState::Stopped;
@@ -134,11 +144,7 @@ impl RecordingMeta {
         })
     }
 
-    async fn update_for_new_recording(
-        &mut self,
-        ad9361: &tokio::sync::Mutex<Ad9361>,
-        ip_core: &Arc<std::sync::Mutex<IpCore>>,
-    ) -> Result<()> {
+    async fn update_for_new_recording(&mut self, state: &AppState) -> Result<()> {
         self.sigmf_meta.set_datetime_now();
 
         if let Some(duration) = self.maximum_duration {
@@ -148,27 +154,39 @@ impl RecordingMeta {
             // state (which is when this function can be called).
             assert!(self.stop_timer_cancellation.is_none());
             self.stop_timer_cancellation = Some(token.clone());
-            let ip_core_ = Arc::clone(ip_core);
-            tokio::spawn(async move {
-                tokio::select! {
-                    _ = token.cancelled() => return,
-                    // add 0.1 s duration to the time to sleep in case the ADC
-                    // sample clock is slower than our clock
-                    _ = tokio::time::sleep(duration + Duration::from_millis(100)) => {}
-                };
-                ip_core_.lock().unwrap().recorder_stop()
-            });
+            {
+                let state = state.clone();
+                tokio::spawn(async move {
+                    tokio::select! {
+                        _ = token.cancelled() => return,
+                        // add 0.1 s duration to the time to sleep in case the ADC
+                        // sample clock is slower than our clock
+                        _ = tokio::time::sleep(duration + Duration::from_millis(100)) => {}
+                    };
+                    state.ip_core().lock().unwrap().recorder_stop()
+                });
+            }
         }
 
         if self.prepend_timestamp {
             self.prepend_timestamp_to_filename();
         }
-        self.mode = ip_core.lock().unwrap().recorder_mode();
+        let (offset, decimation) = {
+            let ip_core = state.ip_core().lock().unwrap();
+            self.mode = ip_core.recorder_mode()?;
+            (
+                ip_core.recorder_input_frequency_offset(),
+                ip_core.recorder_input_decimation(),
+            )
+        };
         self.sigmf_meta.set_datatype(self.mode.into());
-        self.sigmf_meta
-            .set_sample_rate(ad9361.lock().await.get_sampling_frequency().await? as f64);
-        self.sigmf_meta
-            .set_frequency(ad9361.lock().await.get_rx_lo_frequency().await? as f64);
+        {
+            let ad9361 = state.ad9361().lock().await;
+            self.sigmf_meta
+                .set_sample_rate(ad9361.get_sampling_frequency().await? as f64 / decimation as f64);
+            self.sigmf_meta
+                .set_frequency(ad9361.get_rx_lo_frequency().await? as f64 + offset);
+        }
         Ok(())
     }
 
@@ -180,16 +198,16 @@ impl RecordingMeta {
         }
     }
 
-    fn recorder_json(&self, ip_core: &std::sync::Mutex<IpCore>) -> maia_json::Recorder {
-        maia_json::Recorder {
+    fn recorder_json(&self, ip_core: &std::sync::Mutex<IpCore>) -> Result<maia_json::Recorder> {
+        Ok(maia_json::Recorder {
             state: self.recorder_state,
-            mode: ip_core.lock().unwrap().recorder_mode(),
+            mode: ip_core.lock().unwrap().recorder_mode()?,
             prepend_timestamp: self.prepend_timestamp,
             maximum_duration: self
                 .maximum_duration
                 .map(|d| d.as_secs_f64())
                 .unwrap_or(0.0),
-        }
+        })
     }
 
     fn patch_json(&mut self, patch: maia_json::PatchRecordingMetadata) {
@@ -248,37 +266,32 @@ impl RecordingMeta {
     }
 }
 
-pub async fn recorder_json(recorder: &Recorder) -> maia_json::Recorder {
-    recorder
+pub async fn recorder_json(state: &AppState) -> Result<maia_json::Recorder> {
+    state
+        .recorder()
         .metadata
         .lock()
         .await
-        .recorder_json(&recorder.ip_core)
+        .recorder_json(state.ip_core())
 }
 
-pub async fn get_recorder(State(recorder): State<Recorder>) -> Json<maia_json::Recorder> {
-    Json(recorder_json(&recorder).await)
+pub async fn get_recorder(
+    State(state): State<AppState>,
+) -> Result<Json<maia_json::Recorder>, JsonError> {
+    recorder_json(&state)
+        .await
+        .map_err(JsonError::server_error)
+        .map(Json)
 }
 
 pub async fn patch_recorder(
-    State(recorder): State<Recorder>,
+    State(state): State<AppState>,
     Json(patch): Json<maia_json::PatchRecorder>,
 ) -> Result<Json<maia_json::Recorder>, JsonError> {
-    Ok(Json(
-        recorder_patch(recorder, patch)
-            .await
-            .map_err(JsonError::server_error)?,
-    ))
-}
-
-async fn recorder_patch(
-    recorder: Recorder,
-    patch: maia_json::PatchRecorder,
-) -> Result<maia_json::Recorder> {
     if let Some(mode) = patch.mode {
-        recorder.ip_core.lock().unwrap().set_recorder_mode(mode);
+        state.ip_core().lock().unwrap().set_recorder_mode(mode);
     }
-    let mut metadata = recorder.metadata.lock().await;
+    let mut metadata = state.recorder().metadata.lock().await;
     if let Some(prepend) = patch.prepend_timestamp {
         metadata.prepend_timestamp = prepend;
     }
@@ -294,64 +307,79 @@ async fn recorder_patch(
     }
     match (patch.state_change, metadata.recorder_state) {
         (Some(maia_json::RecorderStateChange::Start), maia_json::RecorderState::Stopped) => {
-            let lock = recorder.buffer.try_write_owned().map_err(|_| {
-                anyhow::anyhow!("cannot start new recording: current recording is begin accessed")
-            })?;
-            recorder.recording_in_progress.lock().await.replace(lock);
+            let lock = state
+                .recorder()
+                .buffer
+                .clone()
+                .try_write_owned()
+                .map_err(|_| {
+                    JsonError::client_error_alert(anyhow::anyhow!(
+                        "cannot start new recording: current recording is begin accessed"
+                    ))
+                })?;
+            state
+                .recorder()
+                .recording_in_progress
+                .lock()
+                .await
+                .replace(lock);
             metadata.recorder_state = maia_json::RecorderState::Running;
-            recorder.ip_core.lock().unwrap().recorder_start();
+            state.ip_core().lock().unwrap().recorder_start();
             metadata
-                .update_for_new_recording(&recorder.ad9361, &recorder.ip_core)
-                .await?;
+                .update_for_new_recording(&state)
+                .await
+                .map_err(JsonError::server_error)?;
         }
         (Some(maia_json::RecorderStateChange::Stop), maia_json::RecorderState::Running) => {
-            recorder.ip_core.lock().unwrap().recorder_stop()
+            state.ip_core().lock().unwrap().recorder_stop()
         }
         (_, _) => (),
     }
-    Ok(metadata.recorder_json(&recorder.ip_core))
+    metadata
+        .recorder_json(state.ip_core())
+        .map(Json)
+        .map_err(JsonError::server_error)
 }
 
-pub async fn recording_metadata_json(recorder: &Recorder) -> maia_json::RecordingMetadata {
-    recorder.metadata.lock().await.json()
+pub async fn recording_metadata_json(state: &AppState) -> maia_json::RecordingMetadata {
+    state.recorder().metadata.lock().await.json()
 }
 
 pub async fn get_recording_metadata(
-    State(recorder): State<Recorder>,
+    State(state): State<AppState>,
 ) -> Json<maia_json::RecordingMetadata> {
-    Json(recording_metadata_json(&recorder).await)
+    Json(recording_metadata_json(&state).await)
 }
 
 pub async fn put_recording_metadata(
-    State(recorder): State<Recorder>,
+    State(state): State<AppState>,
     Json(put): Json<maia_json::RecordingMetadata>,
 ) -> Json<maia_json::RecordingMetadata> {
-    let mut metadata = recorder.metadata.lock().await;
+    let mut metadata = state.recorder().metadata.lock().await;
     metadata.patch_json(put.into());
     Json(metadata.json())
 }
 
 pub async fn patch_recording_metadata(
-    State(recorder): State<Recorder>,
+    State(state): State<AppState>,
     Json(patch): Json<maia_json::PatchRecordingMetadata>,
 ) -> Json<maia_json::RecordingMetadata> {
-    let mut metadata = recorder.metadata.lock().await;
+    let mut metadata = state.recorder().metadata.lock().await;
     metadata.patch_json(patch);
     Json(metadata.json())
 }
 
 pub type SigmfStream = ReaderStream<DuplexStream>;
 
-pub async fn get_recording(
-    State(recorder): State<Recorder>,
-) -> Result<(HeaderMap, Body), JsonError> {
-    let buffer = recorder
+pub async fn get_recording(State(state): State<AppState>) -> Result<(HeaderMap, Body), JsonError> {
+    let buffer = state
+        .recorder()
         .buffer
         .clone()
         .try_read_owned()
-        .map_err(|_| JsonError::server_error(anyhow::anyhow!("recording in progress")))?;
-    let metadata = recorder.metadata.lock().await.clone();
-    let (recording, size) = recording_stream(buffer, &metadata, &recorder.ip_core)
+        .map_err(|_| JsonError::client_error_alert(anyhow::anyhow!("recording in progress")))?;
+    let metadata = state.recorder().metadata.lock().await.clone();
+    let (recording, size) = recording_stream(buffer, &metadata, state.ip_core())
         .await
         .map_err(JsonError::server_error)?;
     let mut headers = HeaderMap::new();
@@ -534,7 +562,7 @@ impl Stream for RecordingStream {
         };
         let data = unsafe { std::slice::from_raw_parts(self.chunk, chunk_bytes) };
         let bytes = match self.info.mode.0 {
-            RecorderMode::IQ8bit => Bytes::copy_from_slice(data),
+            RecorderMode::IQ8bit | RecorderMode::IQ16bit => Bytes::copy_from_slice(data),
             RecorderMode::IQ12bit => {
                 let mut bytes =
                     BytesMut::zeroed(self.info.mode.output_bytes_per_item() * chunk_items);
@@ -607,13 +635,14 @@ impl Mode {
         match self.0 {
             RecorderMode::IQ8bit => 2,
             RecorderMode::IQ12bit => 3,
+            RecorderMode::IQ16bit => 4,
         }
     }
 
     fn output_bytes_per_item(&self) -> usize {
         match self.0 {
             RecorderMode::IQ8bit => 2,
-            RecorderMode::IQ12bit => 4,
+            RecorderMode::IQ12bit | RecorderMode::IQ16bit => 4,
         }
     }
 }

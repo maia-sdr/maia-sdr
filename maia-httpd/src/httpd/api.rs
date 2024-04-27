@@ -1,52 +1,38 @@
-use super::ad9361::ad9361_json;
-use super::json_error::JsonError;
-use super::recording::{recorder_json, recording_metadata_json, Recorder};
-use super::spectrometer::{self, spectrometer_json};
-use super::time::time_json;
-use crate::iio::Ad9361;
+use super::{
+    ad9361::ad9361_json,
+    ddc::ddc_json,
+    json_error::JsonError,
+    recording::{recorder_json, recording_metadata_json},
+    spectrometer::spectrometer_json,
+    time::time_json,
+};
+use crate::app::AppState;
 use anyhow::Result;
 use axum::{extract::State, Json};
-use std::sync::Arc;
 
-#[derive(Debug, Clone)]
-pub struct Api {
-    ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
-    spectrometer: spectrometer::State,
-    recorder: Recorder,
+async fn api_json(state: &AppState) -> Result<maia_json::Api> {
+    let ad9361 = {
+        let ad9361 = state.ad9361().lock().await;
+        ad9361_json(&ad9361).await
+    }?;
+    let ddc = ddc_json(state).await?;
+    let spectrometer = spectrometer_json(state).await?;
+    let recorder = recorder_json(state).await?;
+    let recording_metadata = recording_metadata_json(state).await;
+    let time = time_json()?;
+    Ok(maia_json::Api {
+        ad9361,
+        ddc,
+        spectrometer,
+        recorder,
+        recording_metadata,
+        time,
+    })
 }
 
-impl Api {
-    pub fn new(
-        ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
-        spectrometer: spectrometer::State,
-        recorder: Recorder,
-    ) -> Api {
-        Api {
-            ad9361,
-            spectrometer,
-            recorder,
-        }
-    }
-
-    async fn json(&self) -> Result<maia_json::Api> {
-        let ad9361 = {
-            let ad9361 = self.ad9361.lock().await;
-            ad9361_json(&ad9361).await
-        }?;
-        let spectrometer = spectrometer_json(&self.spectrometer).await?;
-        let recorder = recorder_json(&self.recorder).await;
-        let recording_metadata = recording_metadata_json(&self.recorder).await;
-        let time = time_json()?;
-        Ok(maia_json::Api {
-            ad9361,
-            spectrometer,
-            recorder,
-            recording_metadata,
-            time,
-        })
-    }
-}
-
-pub async fn get_api(State(api): State<Api>) -> Result<Json<maia_json::Api>, JsonError> {
-    api.json().await.map_err(JsonError::server_error).map(Json)
+pub async fn get_api(State(state): State<AppState>) -> Result<Json<maia_json::Api>, JsonError> {
+    api_json(&state)
+        .await
+        .map_err(JsonError::server_error)
+        .map(Json)
 }

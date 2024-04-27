@@ -46,7 +46,8 @@
     }
 }
 
-/* Styles */
+/* Focus outline */
+
 :root {
     --focus-outline: 3px solid var(--focus-outline-color);
 }
@@ -87,17 +88,66 @@ body {
     color: var(--text-color);
 }
 
-/* Dialog */
+.hidden {
+    display: none !important;
+}
 
 dialog {
     background-color: var(--background-color);
     color: var(--text-color);
     border: none;
-    padding: 20px;
+    /* apparently some elements in the dialog do not inherit the user-select from body */
+    user-select: none;
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ */
 }
 
 dialog::backdrop {
-  background: rgba(0, 0, 0, 0.5);
+    background: rgba(0, 0, 0, 0.5);
+}
+
+/* Settings dialog */
+
+dialog[open]#settings {
+    padding: 0px;
+    width: min(max(25em, 80vw), 40em);
+    margin-top: min(30px, 5vh);
+}
+
+#settings [role=tabpanel] {
+    padding: 20px;
+    margin-top: auto;
+}
+
+/* Settings tabs */
+
+#settings_tabs {
+    display: flex;
+    background-color: var(--input-bg-color);
+}
+
+#settings_tabs button {
+    padding: 5px 15px;
+    border-width: 0px;
+    border-right-width: 1px;
+}
+
+#settings_tabs button[aria-selected=true] {
+    background-color: var(--background-color);
+    outline: none;
+}
+
+#settings_tabs button[aria-selected=false] {
+    outline: none;
+}
+
+button#close_settings {
+    margin-left: auto;
+    padding-left: 5px;
+    padding-right: 5px;
+    border-width: 0px;
+    border-left-width: 1px;
+    border-bottom-width: 1px;
 }
 
 /* Forms */
@@ -117,7 +167,7 @@ textarea {
 }
 
 textarea {
-  overflow: auto;
+    overflow: auto;
 }
 
 /* Forms styling */
@@ -160,6 +210,19 @@ input:invalid {
     background-color: var(--input-bg-invalid-color);
 }
 
+.link_button {
+    color: var(--text-color);
+    text-decoration: none;
+    text-align: center;
+    border: 1px solid var(--line-color);
+    padding: 2px;
+    background-color: var(--button-color);
+}
+
+.link_button:hover {
+    background-color: var(--button-highlight-color);
+}
+
 /* UI form */
 
 .ui {
@@ -195,8 +258,16 @@ input.baseband_frequency {
     width: 5.5em;
 }
 
+input.baseband_frequency_khz {
+    width: 7em;
+}
+
 input.gain {
     width: 3.5em;
+}
+
+input.decimation {
+    width: 4.25em;
 }
 
 #spectrometer_output_sampling_frequency {
@@ -222,35 +293,50 @@ input.gain {
     background-color: var(--stop-highlight-color);
 }
 
-/* Recording form (dialog) */
+/* Settings panels */
 
-#recording_form {
+#settings form {
     display: grid;
-    width: min(max(25em, 80vw), 40em);
-    grid-template-columns: auto 1fr auto auto;
+    grid-template-columns: auto 1fr;
     row-gap: 10px;
     column-gap: 10px;
     align-items: center;
 }
 
-#recording_form label {
-    grid-column: 1/2;
+#settings label {
+    grid-column: 1;
 }
 
-#recording_form input,
-#recording_form select,
-#recording_form .recording_filename_properties {
-    grid-column: 2/6;
+#settings input,
+#settings select,
+#settings .div_value {
+    grid-column: 2;
 }
 
-.recording_filename_properties {
+#settings input[type='checkbox'] {
+    margin-right: auto;
+}
+
+#settings form div {
     display: flex;
     align-items: center;
     column-gap: 10px;
 }
 
-.recording_filename_properties input:first-child {
+#settings form div input:first-child {
     flex: 1;
+}
+
+/* Recording panel */
+
+#recording_panel form {
+    grid-template-columns: auto 1fr auto auto;
+}
+
+#recording_panel input,
+#recording_panel select,
+#recording_panel .div_value {
+    grid-column: 2/5;
 }
 
 #iqengine_recording {
@@ -259,23 +345,4 @@ input.gain {
 
 #download_recording {
     grid-column: 4/5;
-}
-
-#close_recording_dialog {
-    grid-column: 5/6;
-}
-
-#iqengine_recording,
-#download_recording {
-    color: var(--text-color);
-    text-decoration: none;
-    text-align: center;
-    border: 1px solid var(--line-color);
-    padding: 2px;
-    background-color: var(--button-color);
-}
-
-#iqengine_recording:hover,
-#download_recording:hover {
-    background-color: var(--button-highlight-color);
 }

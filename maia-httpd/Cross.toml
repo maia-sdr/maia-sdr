@@ -1,0 +1,2 @@
+[target.armv7-unknown-linux-gnueabihf]
+image = "ghcr.io/maia-sdr/cross-armv7-unknown-linux-gnueabihf-maia-sdr:latest"

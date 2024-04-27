@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -56,46 +56,49 @@ class TestCmult(AmaranthSim):
 
 
 class TestCmult3x(AmaranthSim):
-    def setUp(self):
-        self.width = 16
-        self.domain_3x = 'clk3x'
-        self.cmult = Cmult3x(
-            self.domain_3x, a_width=self.width, b_width=self.width)
-        self.dut = CommonEdgeTb(
-            self.cmult, [(self.domain_3x, 3, 'common_edge')])
-
     def test_random_inputs(self):
+        self.random_inputs_common(16, 16)
+
+    def test_random_inputs_width(self):
+        self.random_inputs_common(22, 16)
+
+    def random_inputs_common(self, a_width, b_width):
+        domain_3x = 'clk3x'
+        cmult = Cmult3x(
+            domain_3x, a_width=a_width, b_width=b_width)
+        self.dut = CommonEdgeTb(
+            cmult, [(domain_3x, 3, 'common_edge')])
         num_inputs = 1000
-        re_a = np.random.randint(-2**(self.width-1), 2**(self.width-1),
+        re_a = np.random.randint(-2**(a_width-1), 2**(a_width-1),
                                  size=num_inputs)
-        im_a = np.random.randint(-2**(self.width-1), 2**(self.width-1),
+        im_a = np.random.randint(-2**(a_width-1), 2**(a_width-1),
                                  size=num_inputs)
-        re_b = np.random.randint(-2**(self.width-1), 2**(self.width-1),
+        re_b = np.random.randint(-2**(b_width-1), 2**(b_width-1),
                                  size=num_inputs)
-        im_b = np.random.randint(-2**(self.width-1), 2**(self.width-1),
+        im_b = np.random.randint(-2**(b_width-1), 2**(b_width-1),
                                  size=num_inputs)
 
         def bench():
             for j in range(num_inputs):
-                yield self.cmult.clken.eq(1)
-                yield self.cmult.re_a.eq(int(re_a[j]))
-                yield self.cmult.im_a.eq(int(im_a[j]))
-                yield self.cmult.re_b.eq(int(re_b[j]))
-                yield self.cmult.im_b.eq(int(im_b[j]))
+                yield cmult.clken.eq(1)
+                yield cmult.re_a.eq(int(re_a[j]))
+                yield cmult.im_a.eq(int(im_a[j]))
+                yield cmult.re_b.eq(int(re_b[j]))
+                yield cmult.im_b.eq(int(im_b[j]))
                 yield
-                if j >= self.cmult.delay:
+                if j >= cmult.delay:
                     out = (
-                        (yield self.cmult.re_out)
-                        + 1j * (yield self.cmult.im_out))
+                        (yield cmult.re_out)
+                        + 1j * (yield cmult.im_out))
                     expected = (
-                        (re_a[j-self.cmult.delay]
-                         + 1j * im_a[j-self.cmult.delay])
-                        * (re_b[j-self.cmult.delay]
-                           + 1j * im_b[j-self.cmult.delay]))
+                        (re_a[j-cmult.delay]
+                         + 1j * im_a[j-cmult.delay])
+                        * (re_b[j-cmult.delay]
+                           + 1j * im_b[j-cmult.delay]))
                     assert out == expected, \
                         f'out = {out}, expected = {expected} @ cycle = {j}'
 
-        self.simulate(bench, named_clocks={self.domain_3x: 4e-9})
+        self.simulate(bench, named_clocks={domain_3x: 4e-9})
 
 
 if __name__ == '__main__':
