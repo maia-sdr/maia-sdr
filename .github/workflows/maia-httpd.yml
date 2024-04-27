@@ -14,48 +14,38 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: Format
-      run: cargo fmt -- --check
-    - name: Clippy
-      run: cargo clippy --all-targets --all-features -- -D warnings
-    - name: Doc
-      run: cargo doc
-    - name: Install armv7-unknown-linux-gnueabihf Rust target
-      run: rustup target add armv7-unknown-linux-gnueabihf
-    - name: Install gcc-arm-linux-gnueabihf
-      run: |
-        sudo apt-get update
-        sudo apt-get install gcc-arm-linux-gnueabihf
-    - name: Build
-      run: |
-        cargo build --verbose --target armv7-unknown-linux-gnueabihf \
-          --config target.armv7-unknown-linux-gnueabihf.linker=\"arm-linux-gnueabihf-gcc\"
-  armv7_cross:
-    name: Build and test (armv7 with cross)
-    runs-on: ubuntu-latest
-    steps:
-    - uses: actions/checkout@v4
     - name: Install cross
       run: cargo install cross
     - name: Install armv7-unknown-linux-gnueabihf Rust target
       run: rustup target add armv7-unknown-linux-gnueabihf
+    - name: Format
+      run: cargo fmt -- --check
+    - name: Clippy
+      run: cross clippy --target armv7-unknown-linux-gnueabihf --all-targets --all-features -- -D warnings
+    - name: Doc
+      run: RUSTDOCFLAGS="-D warnings" cross doc --target armv7-unknown-linux-gnueabihf
     - name: Build
       run: cross build --verbose --target armv7-unknown-linux-gnueabihf
     - name: Run tests
-      # Tests don't work if we build against buildroot's uclibc, which is the default.
-      # Here we override the default and build against cross's default toolchain, for which
-      # the tests work.
-      run: cargo clean && CROSS_CONFIG=/dev/null cross test --verbose --target armv7-unknown-linux-gnueabihf
+      run: cross test --verbose --target armv7-unknown-linux-gnueabihf
   x86_64:
     name: Build and test (x86_64)
     runs-on: ubuntu-latest
     steps:
     - uses: actions/checkout@v4
-    - name: cargo test
+    - name: Format
+      run: cargo fmt -- --check
+    - name: Clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+    - name: Doc
+      run: RUSTDOCFLAGS="-D warnings" cargo doc
+    - name: Build
+      run: cargo build --verbose
+    - name: Run tests
       run: cargo test --verbose
   publish:
     if: startsWith(github.event.ref, 'refs/tags/maia-httpd-')
-    needs: [armv7, armv7_cross, x86_64]
+    needs: [armv7, x86_64]
     uses: ./.github/workflows/publish.yml
     with:
       path: maia-httpd

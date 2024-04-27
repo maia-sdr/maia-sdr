@@ -1,10 +1,8 @@
 use super::json_error::JsonError;
-use crate::iio;
+use crate::{app::AppState, iio};
 use anyhow::Result;
-use axum::extract::{Json, State};
+use axum::{extract::State, Json};
 use maia_json::{Ad9361, PatchAd9361};
-use std::sync::Arc;
-use tokio::sync::Mutex;
 
 macro_rules! get_attributes {
     ($iio:expr, $($attribute:ident),*) => {
@@ -23,7 +21,7 @@ macro_rules! try_set_attributes {
         paste::paste! {
             $(
                 if let Some(value) = $json.$attribute {
-                    $iio.[<set_ $attribute>](value.into()).await?;
+                    $iio.[<set_ $attribute>](value.into()).await.map_err(JsonError::server_error)?;
                 }
             )*
         }
@@ -44,11 +42,38 @@ pub async fn ad9361_json(iio: &iio::Ad9361) -> Result<Ad9361> {
     ))
 }
 
-async fn ad9361_update(iio: &iio::Ad9361, json: &PatchAd9361) -> Result<()> {
+async fn ad9361_update(
+    state: &AppState,
+    iio: &iio::Ad9361,
+    json: &PatchAd9361,
+) -> Result<(), JsonError> {
+    if let Some(freq) = json.sampling_frequency {
+        // here the input sample rate to the DDC does not matter, because we only
+        // need its config to check the maximum input sampling frequency and the enable
+        let ddc_config = state.ip_core().lock().unwrap().ddc_config_summary(0.0);
+        // check that DDC can support this input frequency if it is enabled
+        if ddc_config.enabled && f64::from(freq) > ddc_config.max_input_sampling_frequency {
+            return Err(JsonError::client_error_alert(anyhow::anyhow!(
+                "tried to set AD9361 sampling rate to {freq}, \
+                           but DDC is enabled and its maximum input sampling frequency is {}",
+                ddc_config.max_input_sampling_frequency
+            )));
+        }
+        iio.set_sampling_frequency(freq)
+            .await
+            .map_err(JsonError::server_error)?;
+
+        // maintain the DDC frequency after the sample rate change
+        state
+            .ip_core()
+            .lock()
+            .unwrap()
+            .set_ddc_frequency(ddc_config.frequency, f64::from(freq))
+            .map_err(JsonError::client_error_alert)?;
+    }
     try_set_attributes!(
         iio,
         json,
-        sampling_frequency,
         rx_rf_bandwidth,
         tx_rf_bandwidth,
         rx_lo_frequency,
@@ -68,35 +93,31 @@ async fn get_ad9361_json(iio: &iio::Ad9361) -> Result<Json<Ad9361>, JsonError> {
         .map(Json)
 }
 
-pub async fn get_ad9361(
-    State(iio): State<Arc<Mutex<iio::Ad9361>>>,
-) -> Result<Json<Ad9361>, JsonError> {
-    let iio = iio.lock().await;
+pub async fn get_ad9361(State(state): State<AppState>) -> Result<Json<Ad9361>, JsonError> {
+    let iio = state.ad9361().lock().await;
     get_ad9361_json(&iio).await
 }
 
 async fn patch_ad9361_json(
-    iio: Arc<Mutex<iio::Ad9361>>,
+    State(state): State<AppState>,
     patch: &PatchAd9361,
 ) -> Result<Json<Ad9361>, JsonError> {
-    let iio = iio.lock().await;
-    ad9361_update(&iio, patch)
-        .await
-        .map_err(JsonError::server_error)?;
+    let iio = state.ad9361().lock().await;
+    ad9361_update(&state, &iio, patch).await?;
     get_ad9361_json(&iio).await
 }
 
 pub async fn put_ad9361(
-    State(iio): State<Arc<Mutex<iio::Ad9361>>>,
+    state: State<AppState>,
     Json(put): Json<Ad9361>,
 ) -> Result<Json<Ad9361>, JsonError> {
     let patch = PatchAd9361::from(put);
-    patch_ad9361_json(iio, &patch).await
+    patch_ad9361_json(state, &patch).await
 }
 
 pub async fn patch_ad9361(
-    State(iio): State<Arc<Mutex<iio::Ad9361>>>,
+    state: State<AppState>,
     Json(patch): Json<PatchAd9361>,
 ) -> Result<Json<Ad9361>, JsonError> {
-    patch_ad9361_json(iio, &patch).await
+    patch_ad9361_json(state, &patch).await
 }

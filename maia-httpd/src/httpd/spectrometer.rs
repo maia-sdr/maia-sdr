@@ -1,36 +1,25 @@
 use super::json_error::JsonError;
-use crate::{fpga::IpCore, iio::Ad9361, spectrometer::SpectrometerConfig};
+use crate::app::AppState;
 use anyhow::Result;
-use axum::Json;
+use axum::{extract::State, Json};
 use maia_json::{PatchSpectrometer, Spectrometer};
-use std::sync::Arc;
 
 // TODO: do not hardcode FFT size
 const FFT_SIZE: u32 = 4096;
 
-#[derive(Debug, Clone)]
-pub struct State {
-    pub ip_core: Arc<std::sync::Mutex<IpCore>>,
-    pub ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
-    pub spectrometer_config: SpectrometerConfig,
-}
-
-impl State {
-    async fn samp_rate(&self) -> Result<f64> {
-        Ok(self.ad9361.lock().await.get_sampling_frequency().await? as f64)
-    }
-}
-
-pub async fn spectrometer_json(state: &State) -> Result<Spectrometer> {
-    let samp_rate = state.samp_rate().await?;
-    let ip_core = state.ip_core.lock().unwrap();
+pub async fn spectrometer_json(state: &AppState) -> Result<Spectrometer> {
+    let ad9361_samp_rate = state.ad9361_samp_rate().await?;
+    let ip_core = state.ip_core().lock().unwrap();
+    let samp_rate = ad9361_samp_rate / ip_core.spectrometer_input_decimation() as f64;
+    let input = ip_core.spectrometer_input();
     let num_integrations = ip_core.spectrometer_number_integrations();
     let mode = ip_core.spectrometer_mode();
     drop(ip_core);
     state
-        .spectrometer_config
+        .spectrometer_config()
         .set_samp_rate_mode(samp_rate as f32, mode);
     Ok(Spectrometer {
+        input,
         input_sampling_frequency: samp_rate,
         output_sampling_frequency: samp_rate / (f64::from(FFT_SIZE) * f64::from(num_integrations)),
         number_integrations: num_integrations,
@@ -39,7 +28,7 @@ pub async fn spectrometer_json(state: &State) -> Result<Spectrometer> {
     })
 }
 
-async fn get_spectrometer_json(state: &State) -> Result<Json<Spectrometer>, JsonError> {
+async fn get_spectrometer_json(state: &AppState) -> Result<Json<Spectrometer>, JsonError> {
     spectrometer_json(state)
         .await
         .map_err(JsonError::server_error)
@@ -47,37 +36,49 @@ async fn get_spectrometer_json(state: &State) -> Result<Json<Spectrometer>, Json
 }
 
 pub async fn get_spectrometer(
-    axum::extract::State(state): axum::extract::State<State>,
+    State(state): State<AppState>,
 ) -> Result<Json<Spectrometer>, JsonError> {
     get_spectrometer_json(&state).await
 }
 
-async fn update_spectrometer(state: &State, patch: &PatchSpectrometer) -> Result<()> {
+async fn update_spectrometer(state: &AppState, patch: &PatchSpectrometer) -> Result<(), JsonError> {
+    let ad9361_samp_rate = state
+        .ad9361_samp_rate()
+        .await
+        .map_err(JsonError::server_error)?;
+    if let Some(input) = &patch.input {
+        state
+            .ip_core()
+            .lock()
+            .unwrap()
+            .set_spectrometer_input(*input, ad9361_samp_rate)
+            .map_err(JsonError::client_error_alert)?;
+    }
     if let Some(mode) = &patch.mode {
-        state.ip_core.lock().unwrap().set_spectrometer_mode(*mode);
+        state.ip_core().lock().unwrap().set_spectrometer_mode(*mode);
     }
     match patch {
         PatchSpectrometer {
             number_integrations: Some(n),
             ..
         } => state
-            .ip_core
+            .ip_core()
             .lock()
             .unwrap()
-            .set_spectrometer_number_integrations(*n)?,
+            .set_spectrometer_number_integrations(*n)
+            .map_err(JsonError::client_error)?,
         PatchSpectrometer {
             output_sampling_frequency: Some(out_freq),
             ..
         } => {
-            let in_freq = state.samp_rate().await?;
+            let mut ip_core = state.ip_core().lock().unwrap();
+            let in_freq = ad9361_samp_rate / ip_core.spectrometer_input_decimation() as f64;
             let num_integrations = (in_freq / (f64::from(FFT_SIZE) * *out_freq))
                 .round()
                 .clamp(1.0, f64::from(u32::MAX)) as u32;
-            state
-                .ip_core
-                .lock()
-                .unwrap()
-                .set_spectrometer_number_integrations(num_integrations)?
+            ip_core
+                .set_spectrometer_number_integrations(num_integrations)
+                .map_err(JsonError::client_error)?;
         }
         _ => {
             // No parameters were specified. We don't do anything.
@@ -87,11 +88,9 @@ async fn update_spectrometer(state: &State, patch: &PatchSpectrometer) -> Result
 }
 
 pub async fn patch_spectrometer(
-    axum::extract::State(state): axum::extract::State<State>,
+    State(state): State<AppState>,
     Json(patch): Json<PatchSpectrometer>,
 ) -> Result<Json<Spectrometer>, JsonError> {
-    update_spectrometer(&state, &patch)
-        .await
-        .map_err(JsonError::server_error)?;
+    update_spectrometer(&state, &patch).await?;
     get_spectrometer_json(&state).await
 }

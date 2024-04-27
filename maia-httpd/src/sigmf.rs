@@ -131,7 +131,7 @@ impl From<maia_json::RecorderMode> for Datatype {
                 field: Field::Complex,
                 format: SampleFormat::I8,
             },
-            maia_json::RecorderMode::IQ12bit => Datatype {
+            maia_json::RecorderMode::IQ12bit | maia_json::RecorderMode::IQ16bit => Datatype {
                 field: Field::Complex,
                 format: SampleFormat::I16(Endianness::Le),
             },

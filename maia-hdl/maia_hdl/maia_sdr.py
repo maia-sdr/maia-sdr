@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -13,14 +13,15 @@ import amaranth.back.verilog
 from .axi4_lite import Axi4LiteRegisterBridge
 from .cdc import RegisterCDC, RxIQCDC
 from .clknx import ClkNxCommonEdge
+from .ddc import DDC
 from .pulse import PulseStretcher
 from .pluto_platform import PlutoPlatform
 from .register import Access, Field, Registers, Register, RegisterMap
-from .recorder import Recorder12IQ
+from .recorder import Recorder16IQ, RecorderMode
 from .spectrometer import Spectrometer
 
 # IP core version
-_version = '0.4.0'
+_version = '0.5.0'
 
 
 class MaiaSDR(Elaboratable):
@@ -68,7 +69,8 @@ class MaiaSDR(Elaboratable):
                 0b0: Register('recorder_control', [
                     Field('start', Access.Wpulse, 1, 0),
                     Field('stop', Access.Wpulse, 1, 0),
-                    Field('mode_8bit', Access.RW, 1, 0),
+                    Field('mode', Access.RW,
+                          Shape.cast(RecorderMode).width, 0),
                     Field('dropped_samples', Access.R, 1, 0),
                 ]),
                 0b1: Register('recorder_next_address', [
@@ -78,18 +80,24 @@ class MaiaSDR(Elaboratable):
             1)
         self.spectrometer = Spectrometer(
             0x1a00_0000, 3, dma_name='m_axi_spectrometer')
-        self.recorder = Recorder12IQ(
+        self.recorder = Recorder16IQ(
             0x0100_0000, 0x1a00_0000, dma_name='m_axi_recorder',
-            domain_in='sampling', domain_dma='s_axi_lite')
+            domain_in='sync', domain_dma='s_axi_lite')
+        self.ddc = DDC('clk3x')
         self.sdr_registers = Registers(
             'sdr', {
-                0b0: Register(
+                0b000: Register(
                     'spectrometer',
                     [
+                        Field('use_ddc_out',
+                              Access.RW,
+                              1,
+                              0),
                         Field('num_integrations',
                               Access.RW,
                               self.spectrometer.nint_width,
                               -1),
+                        Field('abort', Access.Wpulse, 1, 0),
                         Field('last_buffer',
                               Access.R,
                               len(self.spectrometer.last_buffer),
@@ -99,7 +107,87 @@ class MaiaSDR(Elaboratable):
                               1,
                               0),
                     ]),
-            }, 1)
+                0b001: Register(
+                    'ddc_coeff_addr',
+                    [
+                        Field('coeff_waddr',
+                              Access.RW,
+                              10,
+                              0),
+                    ]),
+                0b010: Register(
+                    'ddc_coeff',
+                    [
+                        Field('coeff_wren',
+                              Access.Wpulse,
+                              1,
+                              0),
+                        Field('coeff_wdata',
+                              Access.RW,
+                              18,
+                              0),
+                    ]),
+                0b011: Register(
+                    'ddc_decimation',
+                    [
+                        Field('decimation1',
+                              Access.RW,
+                              7,
+                              0),
+                        Field('decimation2',
+                              Access.RW,
+                              6,
+                              0),
+                        Field('decimation3',
+                              Access.RW,
+                              7,
+                              0),
+                    ]),
+                0b100: Register(
+                    'ddc_frequency',
+                    [
+                        Field('frequency',
+                              Access.RW,
+                              28,
+                              0),
+                    ]),
+                0b101: Register(
+                    'ddc_control',
+                    [
+                        Field('operations_minus_one1',
+                              Access.RW,
+                              7,
+                              0),
+                        Field('operations_minus_one2',
+                              Access.RW,
+                              6,
+                              0),
+                        Field('operations_minus_one3',
+                              Access.RW,
+                              7,
+                              0),
+                        Field('odd_operations1',
+                              Access.RW,
+                              1,
+                              0),
+                        Field('odd_operations3',
+                              Access.RW,
+                              1,
+                              0),
+                        Field('bypass2',
+                              Access.RW,
+                              1,
+                              0),
+                        Field('bypass3',
+                              Access.RW,
+                              1,
+                              0),
+                        Field('enable_input',
+                              Access.RW,
+                              1,
+                              0),
+                    ]),
+            }, 3)
         metadata = {
             'vendor': 'Daniel Estevez',
             'vendorID': 'destevez.net',
@@ -108,7 +196,7 @@ class MaiaSDR(Elaboratable):
             'version': _version,
             'description': 'Maia SDR IP core',
             'licenseText': ('SPDX-License-Identifier: MIT '
-                            'Copyright (C) Daniel Estevez 2022-2023'),
+                            'Copyright (C) Daniel Estevez 2022-2024'),
         }
         self.register_map = RegisterMap({
             0x0: self.control_registers,
@@ -116,8 +204,9 @@ class MaiaSDR(Elaboratable):
             0x20: self.sdr_registers,
         }, metadata)
 
-        self.re_in = Signal(self.spectrometer.width_in)
-        self.im_in = Signal(self.spectrometer.width_in)
+        self.iq_in_width = 12
+        self.re_in = Signal(self.iq_in_width)
+        self.im_in = Signal(self.iq_in_width)
         self.interrupt_out = Signal()
 
     def ports(self):
@@ -159,6 +248,7 @@ class MaiaSDR(Elaboratable):
             sync_spectrometer_interrupt = PulseSynchronizer(
                 i_domain='sync', o_domain='s_axi_lite')
         m.submodules.recorder = self.recorder
+        m.submodules.ddc = self.ddc
         m.submodules.sdr_registers = self.sdr_registers
         m.submodules.sdr_registers_cdc = sdr_registers_cdc = RegisterCDC(
             's_axi_lite', 'sync', self.sdr_registers.aw)
@@ -169,20 +259,45 @@ class MaiaSDR(Elaboratable):
             'sync', 'clk3x', 3)
 
         # RX IQ CDC
-        m.submodules.rxiq_cdc = rxiq_cdc = RxIQCDC('sampling', 'sync', 12)
+        m.submodules.rxiq_cdc = rxiq_cdc = RxIQCDC(
+            'sampling', 'sync', self.iq_in_width)
         m.d.comb += [rxiq_cdc.re_in.eq(self.re_in),
                      rxiq_cdc.im_in.eq(self.im_in)]
 
         # Spectrometer (sync domain)
+        spectrometer_re_in = Signal(
+            self.spectrometer.width_in, reset_less=True)
+        spectrometer_im_in = Signal(
+            self.spectrometer.width_in, reset_less=True)
+        assert len(spectrometer_re_in) == len(self.ddc.re_out)
+        assert len(spectrometer_im_in) == len(self.ddc.im_out)
+        spectrometer_strobe_in = Signal()
+        with m.If(self.sdr_registers['spectrometer']['use_ddc_out']):
+            m.d.sync += [
+                spectrometer_re_in.eq(self.ddc.re_out),
+                spectrometer_im_in.eq(self.ddc.im_out),
+                spectrometer_strobe_in.eq(self.ddc.strobe_out),
+            ]
+        with m.Else():
+            shift = self.spectrometer.width_in - self.iq_in_width
+            m.d.sync += [
+                # The RX IQ samples have 12 bits, but the spectrometer input
+                # has 16 bits. Push the 12 bits to the MSBs.
+                spectrometer_re_in.eq(rxiq_cdc.re_out << shift),
+                spectrometer_im_in.eq(rxiq_cdc.im_out << shift),
+                spectrometer_strobe_in.eq(rxiq_cdc.strobe_out),
+            ]
         m.d.comb += [
-            self.spectrometer.strobe_in.eq(rxiq_cdc.strobe_out),
+            self.spectrometer.strobe_in.eq(spectrometer_strobe_in),
             self.spectrometer.common_edge_2x.eq(common_edge_2x.common_edge),
             self.spectrometer.common_edge_3x.eq(common_edge_3x.common_edge),
-            self.spectrometer.re_in.eq(rxiq_cdc.re_out),
-            self.spectrometer.im_in.eq(rxiq_cdc.im_out),
+            self.spectrometer.re_in.eq(spectrometer_re_in),
+            self.spectrometer.im_in.eq(spectrometer_im_in),
             sync_spectrometer_interrupt.i.eq(self.spectrometer.interrupt_out),
             self.spectrometer.number_integrations.eq(
                 self.sdr_registers['spectrometer']['num_integrations']),
+            self.spectrometer.abort.eq(
+                self.sdr_registers['spectrometer']['abort']),
             self.spectrometer.peak_detect.eq(
                 self.sdr_registers['spectrometer']['peak_detect']),
             self.sdr_registers['spectrometer']['last_buffer'].eq(
@@ -191,13 +306,13 @@ class MaiaSDR(Elaboratable):
 
         # Recorder
         m.d.comb += [
-            # sampling domain
-            self.recorder.strobe_in.eq(Const(1)),
-            self.recorder.re_in.eq(self.re_in),
-            self.recorder.im_in.eq(self.im_in),
+            # sync domain
+            self.recorder.strobe_in.eq(spectrometer_strobe_in),
+            self.recorder.re_in.eq(spectrometer_re_in),
+            self.recorder.im_in.eq(spectrometer_im_in),
             # s_axi_lite domain
-            self.recorder.mode_8bit.eq(
-                self.recorder_registers['recorder_control']['mode_8bit']),
+            self.recorder.mode.eq(
+                self.recorder_registers['recorder_control']['mode']),
             self.recorder.start.eq(
                 self.recorder_registers['recorder_control']['start']),
             self.recorder.stop.eq(
@@ -206,6 +321,44 @@ class MaiaSDR(Elaboratable):
                 self.recorder.dropped_samples),
             (self.recorder_registers['recorder_next_address']
              ['next_address'].eq(self.recorder.next_address)),
+        ]
+
+        # DDC
+        m.d.comb += [
+            self.ddc.common_edge.eq(common_edge_3x.common_edge),
+            self.ddc.enable_input.eq(
+                self.sdr_registers['ddc_control']['enable_input']),
+            self.ddc.frequency.eq(
+                self.sdr_registers['ddc_frequency']['frequency']),
+            self.ddc.coeff_waddr.eq(
+                self.sdr_registers['ddc_coeff_addr']['coeff_waddr']),
+            self.ddc.coeff_wren.eq(
+                self.sdr_registers['ddc_coeff']['coeff_wren']),
+            self.ddc.coeff_wdata.eq(
+                self.sdr_registers['ddc_coeff']['coeff_wdata']),
+            self.ddc.decimation1.eq(
+                self.sdr_registers['ddc_decimation']['decimation1']),
+            self.ddc.decimation2.eq(
+                self.sdr_registers['ddc_decimation']['decimation2']),
+            self.ddc.decimation3.eq(
+                self.sdr_registers['ddc_decimation']['decimation3']),
+            self.ddc.bypass2.eq(
+                self.sdr_registers['ddc_control']['bypass2']),
+            self.ddc.bypass3.eq(
+                self.sdr_registers['ddc_control']['bypass3']),
+            self.ddc.operations_minus_one1.eq(
+                self.sdr_registers['ddc_control']['operations_minus_one1']),
+            self.ddc.operations_minus_one2.eq(
+                self.sdr_registers['ddc_control']['operations_minus_one2']),
+            self.ddc.operations_minus_one3.eq(
+                self.sdr_registers['ddc_control']['operations_minus_one3']),
+            self.ddc.odd_operations1.eq(
+                self.sdr_registers['ddc_control']['odd_operations1']),
+            self.ddc.odd_operations3.eq(
+                self.sdr_registers['ddc_control']['odd_operations3']),
+            self.ddc.strobe_in.eq(rxiq_cdc.strobe_out),
+            self.ddc.re_in.eq(rxiq_cdc.re_out),
+            self.ddc.im_in.eq(rxiq_cdc.im_out),
         ]
 
         # Registers s_axi_lite domain

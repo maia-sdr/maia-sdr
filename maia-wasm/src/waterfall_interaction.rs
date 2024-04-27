@@ -7,7 +7,7 @@ use crate::pointer::{PointerGesture, PointerTracker};
 use crate::render::RenderEngine;
 use crate::ui::Ui;
 use crate::waterfall::Waterfall;
-use std::cell::RefCell;
+use std::cell::{Cell, RefCell};
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
@@ -30,6 +30,19 @@ pub struct WaterfallInteraction {
     pointer_tracker: Rc<RefCell<PointerTracker>>,
     ui: Rc<RefCell<Option<Ui>>>,
     center_freq_overflow: Rc<RefCell<f32>>,
+    drag_series: Rc<Cell<Option<Drag>>>,
+}
+
+#[derive(Copy, Clone)]
+struct Drag {
+    series_id: u8,
+    object: DragObject,
+}
+
+#[derive(Copy, Clone, PartialEq, Eq)]
+enum DragObject {
+    Waterfall,
+    Channel,
 }
 
 impl WaterfallInteraction {
@@ -56,6 +69,7 @@ impl WaterfallInteraction {
             pointer_tracker: Rc::new(RefCell::new(PointerTracker::new())),
             ui: Rc::new(RefCell::new(None)),
             center_freq_overflow: Rc::new(RefCell::new(0.0)),
+            drag_series: Rc::new(Cell::new(None)),
         };
         interaction.set_callbacks();
         Ok(interaction)
@@ -213,33 +227,94 @@ impl WaterfallInteraction {
 
     fn process_gesture(&self, gesture: PointerGesture) -> Result<(), JsValue> {
         match gesture {
-            PointerGesture::Drag { dx, .. } => {
+            PointerGesture::Drag {
+                dx, x0, series_id, ..
+            } => {
                 let mut waterfall = self.waterfall.borrow_mut();
                 let units_per_px = Self::units_per_px(&self.render_engine.borrow(), &waterfall);
-                let freq = waterfall.get_center_frequency() - (dx as f32 * units_per_px);
-                let clamped = Self::clamp_center_frequency(freq, waterfall.get_zoom());
-                let mut overflow = self.center_freq_overflow.borrow_mut();
-                *overflow += freq - clamped;
-                let shift_threshold = 0.25;
-                match self.ui.borrow().as_ref() {
-                    Some(ui) if overflow.abs() >= shift_threshold => {
-                        // Change receive frequency
-                        let shift = shift_threshold.copysign(*overflow);
-                        *overflow -= shift;
-                        let (fc, fs) = waterfall.get_freq_samprate();
-                        let new_fc = fc + 0.5 * f64::from(shift) * fs;
-                        ui.set_rx_lo_frequency(new_fc as u64)?;
+
+                // check if this belongs to the current drag series or if it is a new drag
+                let new_drag = self
+                    .drag_series
+                    .get()
+                    .map(|drag| drag.series_id != series_id)
+                    .unwrap_or(true);
+                if new_drag {
+                    // x0 uses client coordinates so we need to shift it according
+                    // to the client coordinates for the canvas origin.
+                    let x0 = x0 - self.canvas.get_bounding_client_rect().x().round() as i32;
+                    let freq = waterfall.get_center_frequency();
+                    let f0 = freq + x0 as f32 * units_per_px - 1.0 / waterfall.get_zoom();
+                    let chan_freq = waterfall.get_channel_frequency_uniform();
+                    let chan_width = waterfall.get_channel_width_uniform();
+                    let inside_channel = (f0 - chan_freq).abs() <= chan_width;
+                    let object = if inside_channel {
+                        DragObject::Channel
+                    } else {
+                        DragObject::Waterfall
+                    };
+                    self.drag_series.set(Some(Drag { series_id, object }));
+                }
+
+                let object = self.drag_series.get().unwrap().object;
+                match object {
+                    DragObject::Channel => self.drag_channel(&mut waterfall, dx, units_per_px)?,
+                    DragObject::Waterfall => {
+                        self.drag_waterfall(&mut waterfall, dx, units_per_px)?
                     }
-                    _ => waterfall.set_center_frequency(clamped),
                 }
             }
-            PointerGesture::Pinch { center, dilation } => Self::apply_dilation(
+            PointerGesture::Pinch {
+                center, dilation, ..
+            } => Self::apply_dilation(
                 &self.canvas,
                 &self.render_engine.borrow(),
                 &mut self.waterfall.borrow_mut(),
                 dilation.0,
                 center.0,
             ),
+        }
+        Ok(())
+    }
+
+    fn drag_channel(
+        &self,
+        waterfall: &mut Waterfall,
+        dx: i32,
+        units_per_px: f32,
+    ) -> Result<(), JsValue> {
+        let ui = self.ui.borrow();
+        let ui = ui.as_ref().unwrap();
+        let samp_rate = waterfall.get_freq_samprate().1;
+        let freq = waterfall.get_channel_frequency()
+            + f64::from(dx) * f64::from(units_per_px) * 0.5 * samp_rate;
+        let freq = freq.clamp(-0.5 * samp_rate, 0.5 * samp_rate);
+        waterfall.set_channel_frequency(freq);
+        ui.set_ddc_frequency(freq)?;
+        Ok(())
+    }
+
+    fn drag_waterfall(
+        &self,
+        waterfall: &mut Waterfall,
+        dx: i32,
+        units_per_px: f32,
+    ) -> Result<(), JsValue> {
+        let freq = waterfall.get_center_frequency() - dx as f32 * units_per_px;
+        let clamped = Self::clamp_center_frequency(freq, waterfall.get_zoom());
+        let mut overflow = self.center_freq_overflow.borrow_mut();
+        *overflow += freq - clamped;
+        let shift_threshold = 0.25;
+        match self.ui.borrow().as_ref() {
+            Some(ui) if overflow.abs() >= shift_threshold => {
+                // Change receive frequency
+                let shift = shift_threshold.copysign(*overflow);
+                *overflow -= shift;
+                let (fc, fs) = waterfall.get_freq_samprate();
+                let new_fc = fc + 0.5 * f64::from(shift) * fs;
+                ui.set_rx_frequency(new_fc as u64)?;
+            }
+            _ => waterfall.set_center_frequency(clamped),
         }
         Ok(())
     }

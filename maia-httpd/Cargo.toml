@@ -29,9 +29,10 @@ lz4_flex = { version = "0.11.2", features = ["frame"], default-features = true }
 maia-json = { path = "maia-json", version = "0.3.0" }
 maia-pac = { path = "maia-pac", version = "0.3.0"  }
 mime_guess = "2"
-nix = { version = "0.27", features = ["ioctl", "time"] }
+nix = { version = "0.28", features = ["ioctl", "time"] }
 page_size = "0.6"
 paste = "1.0"
+pm-remez = { version = "0.1", features = ["openblas-static"] }
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 tokio = { version = "1", features = ["full"] }
@@ -41,6 +42,10 @@ tokio-util = { version = "0.7", features = ["full"] }
 tower-http = { version = "0.5.1", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+
+[patch.crates-io]
+# https://github.com/rust-ndarray/ndarray-linalg/pull/354
+lax = { git = "https://github.com/mike-kfed/ndarray-linalg.git", rev="cef6aa5e95d8d595e546fe82d09e83d1e1861f5a" }
 
 [profile.release]
 codegen-units = 1

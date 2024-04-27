@@ -3,15 +3,13 @@
 //! This module contains the HTTP server of maia-httpd, which is a web server
 //! implemented using [`axum`].
 
-use crate::{
-    fpga::{InterruptWaiter, IpCore},
-    iio::Ad9361,
-    spectrometer::SpectrometerConfig,
-};
+use crate::app::AppState;
 use anyhow::Result;
-use axum::{routing::get, Router};
+use axum::{
+    routing::{get, put},
+    Router,
+};
 use bytes::Bytes;
-use std::sync::Arc;
 use tokio::sync::broadcast;
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -20,6 +18,7 @@ use tower_http::{
 
 mod ad9361;
 mod api;
+mod ddc;
 mod iqengine;
 mod recording;
 mod spectrometer;
@@ -27,6 +26,8 @@ mod time;
 mod version;
 mod websocket;
 mod zeros;
+
+pub use recording::{RecorderFinishWaiter, RecorderState};
 
 /// HTTP server.
 ///
@@ -54,61 +55,62 @@ impl Server {
     /// [`Server::run`].
     pub async fn new(
         address: &std::net::SocketAddr,
-        ad9361: Arc<tokio::sync::Mutex<Ad9361>>,
-        ip_core: Arc<std::sync::Mutex<IpCore>>,
-        spectrometer_config: SpectrometerConfig,
-        waiter_recorder: InterruptWaiter,
+        state: AppState,
         waterfall_sender: broadcast::Sender<Bytes>,
     ) -> Result<Server> {
-        let recorder =
-            recording::Recorder::new(Arc::clone(&ad9361), Arc::clone(&ip_core), waiter_recorder)
-                .await?;
-        let spectrometer = spectrometer::State {
-            ip_core: Arc::clone(&ip_core),
-            ad9361: Arc::clone(&ad9361),
-            spectrometer_config,
-        };
-        let api = api::Api::new(Arc::clone(&ad9361), spectrometer.clone(), recorder.clone());
-
         let app = Router::new()
-            .route("/api", get(api::get_api).with_state(api))
+            // all the following routes have .with_state(state)
+            .route("/api", get(api::get_api))
             .route(
                 "/api/ad9361",
                 get(ad9361::get_ad9361)
                     .put(ad9361::put_ad9361)
-                    .patch(ad9361::patch_ad9361)
-                    .with_state(ad9361),
+                    .patch(ad9361::patch_ad9361),
             )
             .route(
                 "/api/spectrometer",
-                get(spectrometer::get_spectrometer)
-                    .patch(spectrometer::patch_spectrometer)
-                    .with_state(spectrometer),
+                get(spectrometer::get_spectrometer).patch(spectrometer::patch_spectrometer),
             )
             .route(
+                "/api/ddc/config",
+                get(ddc::get_ddc_config)
+                    .put(ddc::put_ddc_config)
+                    .patch(ddc::patch_ddc_config),
+            )
+            .route("/api/ddc/design", put(ddc::put_ddc_design))
+            .route(
                 "/api/recorder",
-                get(recording::get_recorder)
-                    .patch(recording::patch_recorder)
-                    .with_state(recorder.clone()),
+                get(recording::get_recorder).patch(recording::patch_recorder),
             )
             .route(
                 "/api/recording/metadata",
                 get(recording::get_recording_metadata)
                     .put(recording::put_recording_metadata)
-                    .patch(recording::patch_recording_metadata)
-                    .with_state(recorder.clone()),
+                    .patch(recording::patch_recording_metadata),
             )
+            .route("/recording", get(recording::get_recording))
+            .route("/version", get(version::get_version))
+            // IQEngine viewer for IQ recording
+            .route(
+                "/api/datasources/maiasdr/maiasdr/recording/meta",
+                get(recording::iqengine::meta),
+            )
+            .route(
+                "/api/datasources/maiasdr/maiasdr/recording/iq-data",
+                get(recording::iqengine::iq_data),
+            )
+            .route(
+                "/api/datasources/maiasdr/maiasdr/recording/minimap-data",
+                get(recording::iqengine::minimap_data),
+            )
+            .with_state(state)
+            // the following routes have another (or no) state
             .route(
                 "/api/time",
                 get(time::get_time)
                     .put(time::put_time)
                     .patch(time::patch_time),
             )
-            .route(
-                "/recording",
-                get(recording::get_recording).with_state(recorder.clone()),
-            )
-            .route("/version", get(version::get_version).with_state(ip_core))
             .route(
                 "/waterfall",
                 get(websocket::handler).with_state(waterfall_sender),
@@ -118,18 +120,6 @@ impl Server {
             .route_service(
                 "/view/api/maiasdr/maiasdr/recording",
                 ServeFile::new("iqengine/index.html"),
-            )
-            .route(
-                "/api/datasources/maiasdr/maiasdr/recording/meta",
-                get(recording::iqengine::meta).with_state(recorder.clone()),
-            )
-            .route(
-                "/api/datasources/maiasdr/maiasdr/recording/iq-data",
-                get(recording::iqengine::iq_data).with_state(recorder.clone()),
-            )
-            .route(
-                "/api/datasources/maiasdr/maiasdr/recording/minimap-data",
-                get(recording::iqengine::minimap_data).with_state(recorder),
             )
             .route("/assets/:filename", get(iqengine::serve_assets))
             .fallback_service(ServeDir::new("."));
@@ -156,28 +146,47 @@ mod json_error {
     use serde::Serialize;
 
     #[derive(Serialize, Debug, Clone, Eq, PartialEq)]
-    pub struct JsonError {
-        http_status_code: u16,
-        error_description: String,
-    }
+    pub struct JsonError(maia_json::Error);
 
     impl JsonError {
-        pub fn from_error(status_code: StatusCode, error: Error) -> JsonError {
-            JsonError {
+        pub fn from_error<E: Into<Error>>(
+            error: E,
+            status_code: StatusCode,
+            suggested_action: maia_json::ErrorAction,
+        ) -> JsonError {
+            let error: Error = error.into();
+            JsonError(maia_json::Error {
                 http_status_code: status_code.as_u16(),
                 error_description: format!("{error:#}"),
-            }
+                suggested_action,
+            })
         }
 
-        pub fn server_error(error: Error) -> JsonError {
-            JsonError::from_error(StatusCode::INTERNAL_SERVER_ERROR, error)
+        pub fn client_error_alert<E: Into<Error>>(error: E) -> JsonError {
+            JsonError::from_error(
+                error,
+                StatusCode::BAD_REQUEST,
+                maia_json::ErrorAction::Alert,
+            )
+        }
+
+        pub fn client_error<E: Into<Error>>(error: E) -> JsonError {
+            JsonError::from_error(error, StatusCode::BAD_REQUEST, maia_json::ErrorAction::Log)
+        }
+
+        pub fn server_error<E: Into<Error>>(error: E) -> JsonError {
+            JsonError::from_error(
+                error,
+                StatusCode::INTERNAL_SERVER_ERROR,
+                maia_json::ErrorAction::Log,
+            )
         }
     }
 
     impl IntoResponse for JsonError {
         fn into_response(self) -> Response {
-            let status_code = StatusCode::from_u16(self.http_status_code).unwrap();
-            let json = serde_json::to_string(&self).unwrap();
+            let status_code = StatusCode::from_u16(self.0.http_status_code).unwrap();
+            let json = serde_json::to_string(&self.0).unwrap();
             (status_code, json).into_response()
         }
     }

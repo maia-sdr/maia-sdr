@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -43,8 +43,8 @@ async def iq_data(dut, sample_stream):
     while True:
         await rising
         dut.strobe_in.value = 1
-        dut.re_in.value = re = random.randrange(-2**11, 2**11)
-        dut.im_in.value = im = random.randrange(-2**11, 2**11)
+        dut.re_in.value = re = random.randrange(-2**15, 2**15)
+        dut.im_in.value = im = random.randrange(-2**15, 2**15)
         sample_stream.append((re, im))
         await rising
         dut.strobe_in.value = 0
@@ -79,18 +79,27 @@ def check_output(tb, sample_stream):
     written = tb.memory._data[:tb.dut.next_address.value]
     sample_re = np.array([a[0] for a in sample_stream])
     sample_im = np.array([a[1] for a in sample_stream])
-    if tb.dut.mode_8bit.value:
-        re = np.array(written[::2], 'int8').astype('int16') << 4
-        im = np.array(written[1::2], 'int8').astype('int16') << 4
-        sample_re = sample_re >> 4 << 4
-        sample_im = sample_im >> 4 << 4
-    else:
+    if tb.dut.mode.value == 0:  # 16 bit
+        re = np.array(written, 'uint8').view('int16')[::2]
+        im = np.array(written, 'uint8').view('int16')[1::2]
+    elif tb.dut.mode.value == 2:  # 8 bit
+        re = np.array(written[::2], 'int8').astype('int16') << 8
+        im = np.array(written[1::2], 'int8').astype('int16') << 8
+        sample_re = sample_re >> 8 << 8
+        sample_im = sample_im >> 8 << 8
+    elif tb.dut.mode.value == 1:  # 12 bit
         L = len(written) // 3 * 3
         re = ((np.array(written[:L:3], 'int8').astype('int16') << 4)
               | (np.array(written[1:L:3], 'uint8').astype('int16') >> 4))
         im = (((np.array(written[1:L:3], 'uint8') << 4).view('int8')
                .astype('int16') << 4)
               | np.array(written[2:L:3], 'uint8'))
+        re <<= 4
+        im <<= 4
+        sample_re = sample_re >> 4 << 4
+        sample_im = sample_im >> 4 << 4
+    else:
+        raise ValueError('invalid mode')
     for j in range(sample_re.size - re.size):
         if sample_re[j] == re[0]:
             re_match = np.array_equal(sample_re[j:][:re.size], re)
@@ -109,7 +118,7 @@ async def run_test(dut, backpressure_inserter=None):
     dut.iq_rst.value = 1
     dut.start.value = 0
     dut.stop.value = 0
-    dut.mode_8bit.value = 0
+    dut.mode.value = 0  # 16 bit
     dut.strobe_in.value = 0
     await ClockCycles(dut.clk, 10)
     tb = RecorderTB(dut)
@@ -131,7 +140,18 @@ async def run_test(dut, backpressure_inserter=None):
     check_output(tb, sample_stream)
 
     await ClockCycles(dut.clk, 100)
-    dut.mode_8bit.value = 1
+    dut.mode.value = 1  # 12 bit
+    await ClockCycles(dut.clk, 20)
+    del sample_stream[:]
+    await start(dut)
+    await wait_finished(dut)
+    assert dut.next_address.value.integer == MEMORY_END
+    await ClockCycles(dut.clk, 20)
+    assert dut.dropped_samples.value == 0
+    check_output(tb, sample_stream)
+
+    await ClockCycles(dut.clk, 100)
+    dut.mode.value = 2  # 8 bit
     await ClockCycles(dut.clk, 20)
     del sample_stream[:]
     await start(dut)

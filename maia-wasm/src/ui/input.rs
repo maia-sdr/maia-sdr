@@ -1,6 +1,6 @@
 use std::ops::Deref;
 use std::rc::Rc;
-use web_sys::{HtmlInputElement, HtmlSelectElement};
+use web_sys::{HtmlInputElement, HtmlSelectElement, HtmlSpanElement};
 
 pub trait InputElement<E>: Deref<Target = E> + From<Rc<E>> + Clone {
     type T;
@@ -29,6 +29,7 @@ macro_rules! presentation {
 presentation!(DefaultPresentation, 1.0, None);
 presentation!(IntegerPresentation, 1.0, Some(1.0));
 presentation!(MHzPresentation, 1e6, Some(1e3));
+presentation!(KHzPresentation, 1e3, Some(1.0));
 
 #[derive(Clone)]
 pub struct NumberInput<T, P = DefaultPresentation> {
@@ -87,10 +88,7 @@ macro_rules! number_input_int {
 macro_rules! number_input_float {
     ($($t:ty),*) => {
         $(
-            impl<P> InputElement<HtmlInputElement> for NumberInput<$t, P>
-            where
-                P: NumberPresentation,
-            {
+            impl<P: NumberPresentation> InputElement<HtmlInputElement> for NumberInput<$t, P> {
                 type T = $t;
 
                 fn get(&self) -> Option<$t> {
@@ -105,6 +103,82 @@ macro_rules! number_input_float {
 
 number_input_int!(u64, u32);
 number_input_float!(f64, f32);
+
+#[derive(Clone)]
+pub struct NumberSpan<T, P = DefaultPresentation> {
+    element: Rc<HtmlSpanElement>,
+    _phantom: std::marker::PhantomData<(T, P)>,
+}
+
+impl<T, P> From<Rc<HtmlSpanElement>> for NumberSpan<T, P> {
+    fn from(element: Rc<HtmlSpanElement>) -> NumberSpan<T, P> {
+        NumberSpan {
+            element,
+            _phantom: std::marker::PhantomData,
+        }
+    }
+}
+
+impl<T, P> Deref for NumberSpan<T, P> {
+    type Target = HtmlSpanElement;
+
+    fn deref(&self) -> &HtmlSpanElement {
+        &self.element
+    }
+}
+
+macro_rules! number_span_set {
+    ($t:ty) => {
+        fn set(&self, value: &$t) {
+            let value = value.clone() as f64;
+            let value = if let Some(resolution) = P::RESOLUTION {
+                (value / resolution).round() * resolution
+            } else {
+                value
+            };
+            let value = value / P::SCALE;
+            self.element.set_text_content(Some(&value.to_string()));
+        }
+    };
+}
+
+macro_rules! number_span_int {
+    ($($t:ty),*) => {
+        $(
+            impl<P: NumberPresentation> InputElement<HtmlSpanElement> for NumberSpan<$t, P> {
+                type T = $t;
+
+                fn get(&self) -> Option<$t> {
+                    let value: f64 = self.element.text_content()?.parse().ok()?;
+                    let value = (value * P::SCALE).round() as i64;
+                    <$t>::try_from(value).ok()
+                }
+
+                number_span_set!($t);
+            }
+        )*
+    }
+}
+
+macro_rules! number_span_float {
+    ($($t:ty),*) => {
+        $(
+            impl<P: NumberPresentation> InputElement<HtmlSpanElement> for NumberSpan<$t, P> {
+                type T = $t;
+
+                fn get(&self) -> Option<$t> {
+                    let value: f64 = self.element.text_content()?.parse().ok()?;
+                    Some((value * P::SCALE) as $t)
+                }
+
+                number_span_set!($t);
+            }
+        )*
+    }
+}
+
+number_span_int!(u64, u32);
+number_span_float!(f64, f32);
 
 #[derive(Clone)]
 pub struct TextInput {

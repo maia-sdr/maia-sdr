@@ -13,7 +13,13 @@ const NUM_POINTERS: usize = 2;
 /// state information about the pointers that are active, and generates
 /// [`PointerGesture`]'s.
 pub struct PointerTracker {
-    slots: [Option<PointerEvent>; NUM_POINTERS],
+    slots: [Option<Pointer>; NUM_POINTERS],
+    new_series_id: u8,
+}
+
+struct Pointer {
+    event: PointerEvent,
+    series_id: u8,
 }
 
 /// Pointer gesture.
@@ -32,6 +38,15 @@ pub enum PointerGesture {
         dx: i32,
         /// Displacement in the Y dimension (in pixels).
         dy: i32,
+        /// X position (in pixels) of the previous pointer location
+        x0: i32,
+        /// Y position (in pixels) of the previous pointer location
+        y0: i32,
+        /// ID for the series of gestures.
+        ///
+        /// Gestures that are generated as part of the same action have the same
+        /// series ID.
+        series_id: u8,
     },
     /// A pinch gesture.
     ///
@@ -48,6 +63,11 @@ pub enum PointerGesture {
         /// The dilation factor indicates the zoom factor that the relative
         /// movement of the fingers has caused.
         dilation: (f32, f32),
+        /// ID for the series of gestures.
+        ///
+        /// Gestures that are generated as part of the same action have the same
+        /// series ID.
+        series_id: u8,
     },
 }
 
@@ -56,6 +76,7 @@ impl PointerTracker {
     pub fn new() -> PointerTracker {
         PointerTracker {
             slots: Default::default(),
+            new_series_id: 0,
         }
     }
 
@@ -72,7 +93,7 @@ impl PointerTracker {
         // Search previous event with same pointer ID.
         if let Some(slot) = self.slots.iter_mut().find_map(|x| {
             x.as_mut().and_then(|x| {
-                if x.pointer_id() == pointer_id {
+                if x.event.pointer_id() == pointer_id {
                     Some(x)
                 } else {
                     None
@@ -80,12 +101,17 @@ impl PointerTracker {
             })
         }) {
             // Replace event with the new one.
-            *slot = event;
+            slot.event = event;
             return;
         }
         // Search for an empty slot.
         if let Some(slot) = self.slots.iter_mut().find(|x| x.is_none()) {
-            slot.replace(event);
+            // create new series of pointer
+            slot.replace(Pointer {
+                event,
+                series_id: self.new_series_id,
+            });
+            self.new_series_id = self.new_series_id.wrapping_add(1);
             return;
         }
         // We found no empty slots, so we cannot handle this pointer (this
@@ -100,11 +126,10 @@ impl PointerTracker {
         let pointer_id = event.pointer_id();
         // Search previous event with the same pointer (this typically should be
         // found).
-        if let Some(slot) = self
-            .slots
-            .iter_mut()
-            .find(|x| x.as_ref().map_or(false, |x| x.pointer_id() == pointer_id))
-        {
+        if let Some(slot) = self.slots.iter_mut().find(|x| {
+            x.as_ref()
+                .map_or(false, |x| x.event.pointer_id() == pointer_id)
+        }) {
             // Remove event.
             slot.take();
             return;
@@ -113,10 +138,10 @@ impl PointerTracker {
         // typically should not happen).
     }
 
-    fn get_event(&self, pointer_id: i32) -> Option<&PointerEvent> {
+    fn get_pointer(&self, pointer_id: i32) -> Option<&Pointer> {
         self.slots.iter().find_map(|x| {
             x.as_ref().and_then(|x| {
-                if x.pointer_id() == pointer_id {
+                if x.event.pointer_id() == pointer_id {
                     Some(x)
                 } else {
                     None
@@ -133,7 +158,7 @@ impl PointerTracker {
     pub fn on_pointer_move(&mut self, event: PointerEvent) -> Option<PointerGesture> {
         let ret = match self.num_active_pointers() {
             1 => self
-                .get_event(event.pointer_id())
+                .get_pointer(event.pointer_id())
                 .map(|old_event| self.drag(&event, old_event)),
             2 => self.pinch(&event),
             _ => None,
@@ -158,10 +183,15 @@ impl PointerTracker {
         self.slots.iter().filter(|x| x.is_some()).count()
     }
 
-    fn drag(&self, new: &PointerEvent, old: &PointerEvent) -> PointerGesture {
+    fn drag(&self, new: &PointerEvent, old: &Pointer) -> PointerGesture {
+        let x0 = old.event.client_x();
+        let y0 = old.event.client_y();
         PointerGesture::Drag {
-            dx: new.client_x() - old.client_x(),
-            dy: new.client_y() - old.client_y(),
+            dx: new.client_x() - x0,
+            dy: new.client_y() - y0,
+            x0,
+            y0,
+            series_id: old.series_id,
         }
     }
 
@@ -169,7 +199,7 @@ impl PointerTracker {
         let pointer_id = event.pointer_id();
         // This event might not be present in the slots. In that case the pinch
         // is invalid.
-        let same = self.get_event(pointer_id)?;
+        let same = self.get_pointer(pointer_id)?;
         // There must be another event in the slots, since this is only called
         // when there are 2 events in the slots.
         let other = self
@@ -177,7 +207,7 @@ impl PointerTracker {
             .iter()
             .find_map(|x| {
                 x.as_ref().and_then(|x| {
-                    if x.pointer_id() != pointer_id {
+                    if x.event.pointer_id() != pointer_id {
                         Some(x)
                     } else {
                         None
@@ -185,10 +215,10 @@ impl PointerTracker {
                 })
             })
             .unwrap();
-        let same_x = same.client_x() as f32;
-        let same_y = same.client_y() as f32;
-        let other_x = other.client_x() as f32;
-        let other_y = other.client_y() as f32;
+        let same_x = same.event.client_x() as f32;
+        let same_y = same.event.client_y() as f32;
+        let other_x = other.event.client_x() as f32;
+        let other_y = other.event.client_y() as f32;
         let new_x = event.client_x() as f32;
         let new_y = event.client_y() as f32;
         let min_dilation = 0.5;
@@ -211,8 +241,11 @@ impl PointerTracker {
             1.0
         };
         Some(PointerGesture::Pinch {
-            center: (other.client_x(), other.client_y()),
+            center: (other.event.client_x(), other.event.client_y()),
             dilation: (dilation_x, dilation_y),
+            // to assign a consistent series ID regardless of which pointer
+            // generated the event, we take the minimum
+            series_id: same.series_id.min(other.series_id),
         })
     }
 }
