@@ -277,11 +277,16 @@ impl Waterfall {
         center_freq + 0.5 * fft_bin_hz
     }
 
+    /// Returns whether the DDC channel is visible in the waterfall.
+    pub fn is_channel_visible(&self) -> bool {
+        self.channel_num_idx.get() != 0
+    }
+
     /// Sets whether the DDC channel is visible in the waterfall.
     ///
     /// By default the channel is not visible.
-    pub fn set_channel_visible(&mut self, visible: bool) {
-        self.channel_num_idx.replace(if visible {
+    pub fn set_channel_visible(&self, visible: bool) {
+        self.channel_num_idx.set(if visible {
             Self::RECTANGLE_NUM_INDICES as u32
         } else {
             0
