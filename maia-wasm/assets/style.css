@@ -20,6 +20,7 @@
     --record-highlight-color: #7b7;
     --stop-color: #d99;
     --stop-highlight-color: #b77;
+    --stopping-color: #dd9;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -39,10 +40,11 @@
         --button-highlight-color: #777;
 
         /* Record button */
-        --record-color: #9d9;
-        --record-highlight-color: #7b7;
-        --stop-color: #d99;
-        --stop-highlight-color: #b77;
+        --record-color: #7b7;
+        --record-highlight-color: #9d9;
+        --stop-color: #b77;
+        --stop-highlight-color: #d99;
+        --stopping-color: #bb7;
     }
 }
 
@@ -292,6 +294,15 @@ input.decimation {
 
 .stop_button:hover {
     background-color: var(--stop-highlight-color);
+}
+
+.stopping_button {
+    width: 5em;
+    background-color: var(--stopping-color);
+}
+
+.stopping_button:hover {
+    background-color: var(--stopping-color);
 }
 
 /* Settings panels */

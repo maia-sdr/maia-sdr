@@ -449,6 +449,8 @@ pub enum RecorderState {
     Stopped,
     /// The IQ recorder is running.
     Running,
+    /// The IQ recoder is stopping.
+    Stopping,
 }
 
 /// Recording metadata JSON schema.
