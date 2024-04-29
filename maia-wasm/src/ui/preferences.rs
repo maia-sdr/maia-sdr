@@ -70,7 +70,7 @@ impl_preference_data! {
     ad9361_rx_gain_mode: maia_json::Ad9361GainMode = maia_json::Ad9361GainMode::SlowAttack,
     ad9361_rx_gain: f64 = 70.0,
     ddc_frequency: f64 = 0.0,
-    ddc_decimation: u32 = 2,
+    ddc_decimation: u32 = 20,
     ddc_transition_bandwidth: f64 = 0.05,
     ddc_passband_ripple: f64 = 0.01,
     ddc_stopband_attenuation_db: f64 = 60.0,
