@@ -548,13 +548,14 @@ impl Ui {
         let text = match json.state {
             maia_json::RecorderState::Stopped => "Record",
             maia_json::RecorderState::Running => "Stop",
+            maia_json::RecorderState::Stopping => "Stopping",
         };
         for button in [
             &self.elements.recorder_button,
             &self.elements.recorder_button_replica,
         ] {
             if button.inner_html() != text {
-                button.set_inner_html(text);
+                button.set_text_content(Some(text));
                 button.set_class_name(&format!("{}_button", text.to_lowercase()));
             }
         }
@@ -576,10 +577,19 @@ impl Ui {
     fn recorder_button_onclick(&self) -> Closure<dyn Fn() -> JsValue> {
         let ui = self.clone();
         Closure::new(move || {
-            let action = match ui.elements.recorder_button.inner_html().as_str() {
-                "Record" => maia_json::RecorderStateChange::Start,
-                "Stop" => maia_json::RecorderStateChange::Stop,
-                _ => return JsValue::NULL,
+            let action = match ui.elements.recorder_button.text_content().as_deref() {
+                Some("Record") => maia_json::RecorderStateChange::Start,
+                Some("Stop") => maia_json::RecorderStateChange::Stop,
+                Some("Stopping") => {
+                    // ignore click
+                    return JsValue::NULL;
+                }
+                content => {
+                    web_sys::console::error_1(
+                        &format!("recorder_button has unexpecte text_content: {content:?}").into(),
+                    );
+                    return JsValue::NULL;
+                }
             };
             let patch = maia_json::PatchRecorder {
                 state_change: Some(action),

@@ -331,7 +331,8 @@ pub async fn patch_recorder(
                 .map_err(JsonError::server_error)?;
         }
         (Some(maia_json::RecorderStateChange::Stop), maia_json::RecorderState::Running) => {
-            state.ip_core().lock().unwrap().recorder_stop()
+            state.ip_core().lock().unwrap().recorder_stop();
+            metadata.recorder_state = maia_json::RecorderState::Stopping;
         }
         (_, _) => (),
     }
