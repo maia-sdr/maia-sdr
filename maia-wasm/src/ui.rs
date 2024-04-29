@@ -58,6 +58,7 @@ ui_elements! {
     colormap_select: HtmlSelectElement => EnumInput<colormap::Colormap>,
     waterfall_show_ddc: HtmlInputElement => CheckboxInput,
     recorder_button: HtmlButtonElement => Rc<HtmlButtonElement>,
+    recorder_button_replica: HtmlButtonElement => Rc<HtmlButtonElement>,
     settings_button: HtmlButtonElement => Rc<HtmlButtonElement>,
     alert_dialog: HtmlDialogElement => Rc<HtmlDialogElement>,
     alert_message: HtmlParagraphElement => Rc<HtmlParagraphElement>,
@@ -175,6 +176,9 @@ impl Ui {
             ddc_tab,
             waterfall_tab
         );
+        self.elements
+            .recorder_button_replica
+            .set_onclick(self.elements.recorder_button.onclick().as_ref());
 
         Ok(())
     }
@@ -545,10 +549,14 @@ impl Ui {
             maia_json::RecorderState::Stopped => "Record",
             maia_json::RecorderState::Running => "Stop",
         };
-        let button = &self.elements.recorder_button;
-        if button.inner_html() != text {
-            button.set_inner_html(text);
-            button.set_class_name(&format!("{}_button", text.to_lowercase()));
+        for button in [
+            &self.elements.recorder_button,
+            &self.elements.recorder_button_replica,
+        ] {
+            if button.inner_html() != text {
+                button.set_inner_html(text);
+                button.set_class_name(&format!("{}_button", text.to_lowercase()));
+            }
         }
     }
 

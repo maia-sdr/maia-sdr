@@ -276,20 +276,21 @@ input.decimation {
 
 /* Record / Stop button */
 
-#recorder_button {
+.record_button {
     width: 5em;
     background-color: var(--record-color);
 }
 
-#recorder_button:hover {
+.record_button:hover {
     background-color: var(--record-highlight-color);
 }
 
-#recorder_button.stop_button {
+.stop_button {
+    width: 5em;
     background-color: var(--stop-color);
 }
 
-#recorder_button.stop_button:hover {
+.stop_button:hover {
     background-color: var(--stop-highlight-color);
 }
 
