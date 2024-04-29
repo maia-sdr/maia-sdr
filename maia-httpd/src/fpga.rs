@@ -103,15 +103,21 @@ impl std::ops::Deref for Registers {
 unsafe impl Send for Registers {}
 
 fn default_ddc_config() -> maia_json::PutDDCConfig {
-    maia_json::PutDDCConfig {
-        frequency: 0.0,
-        fir1: maia_json::DDCFIRConfig {
-            coefficients: vec![0],
-            decimation: 2,
+    // this design can be calculated quickly and it is good for sample rates
+    // above 61.44 Msps
+    let input_samp_rate = 61.44e6;
+    crate::ddc::make_design(
+        &maia_json::PutDDCDesign {
+            frequency: 0.0,
+            decimation: 20,
+            transition_bandwidth: None,
+            passband_ripple: None,
+            stopband_attenuation_db: None,
+            stopband_one_over_f: None,
         },
-        fir2: None,
-        fir3: None,
-    }
+        input_samp_rate,
+    )
+    .unwrap()
 }
 
 macro_rules! impl_set_ddc_fir {
@@ -275,12 +281,7 @@ impl IpCore {
         } else {
             maia_json::SpectrometerMode::Average
         };
-        ip_core
-            .set_ddc_config(
-                &default_ddc_config(),
-                crate::ddc::constants::CLOCK_FREQUENCY,
-            )
-            .unwrap();
+        ip_core.set_ddc_config(&default_ddc_config(), 0.0).unwrap();
         let interrupt_handler = InterruptHandler::new(uio, interrupt_registers);
         Ok((ip_core, interrupt_handler))
     }
