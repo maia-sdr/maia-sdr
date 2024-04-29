@@ -85,6 +85,8 @@
 	        <option>Viridis</option>
 	        <option>Inferno</option>
             </select>
+            <label for="waterfall_show_ddc">Show DDC passband</label>
+            <input type="checkbox" id="waterfall_show_ddc" checked>
           </form>
         </div>
     </dialog>
@@ -144,7 +146,7 @@
         </label>
         <label>Decimation
           <input type="number" class="decimation" value="20" id="ddc_decimation" step="1" min="2">
-        </label>       
+        </label>
         <label>DDC output <span id="ddc_output_sampling_frequency"></span> Msps</label>
         <button type="button" id="recorder_button"></button>
         <button type="button" id="settings_button">Settings</button>

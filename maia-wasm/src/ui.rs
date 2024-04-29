@@ -47,6 +47,7 @@ pub struct Ui {
     document: Rc<Document>,
     elements: Elements,
     api_state: Rc<RefCell<Option<maia_json::Api>>>,
+    local_settings: Rc<RefCell<LocalSettings>>,
     preferences: Rc<RefCell<preferences::Preferences>>,
     render_engine: Rc<RefCell<RenderEngine>>,
     waterfall: Rc<RefCell<Waterfall>>,
@@ -55,6 +56,7 @@ pub struct Ui {
 // Defines the 'struct Elements' and its constructor
 ui_elements! {
     colormap_select: HtmlSelectElement => EnumInput<colormap::Colormap>,
+    waterfall_show_ddc: HtmlInputElement => CheckboxInput,
     recorder_button: HtmlButtonElement => Rc<HtmlButtonElement>,
     settings_button: HtmlButtonElement => Rc<HtmlButtonElement>,
     alert_dialog: HtmlDialogElement => Rc<HtmlDialogElement>,
@@ -98,6 +100,11 @@ ui_elements! {
     recorder_maximum_duration: HtmlInputElement => NumberInput<f64>,
 }
 
+#[derive(Default)]
+struct LocalSettings {
+    waterfall_show_ddc: bool,
+}
+
 impl Ui {
     /// Creates a new user interface.
     pub fn new(
@@ -113,6 +120,7 @@ impl Ui {
             document,
             elements,
             api_state: Rc::new(RefCell::new(None)),
+            local_settings: Rc::new(RefCell::new(LocalSettings::default())),
             preferences,
             render_engine,
             waterfall,
@@ -130,6 +138,7 @@ impl Ui {
             change,
             self,
             colormap_select,
+            waterfall_show_ddc,
             waterfall_min,
             waterfall_max,
             ad9361_rx_lo_frequency,
@@ -661,6 +670,34 @@ impl Ui {
         })
     }
 
+    fn waterfall_show_ddc_onchange(&self) -> Closure<dyn Fn()> {
+        let ui = self.clone();
+        Closure::new(move || {
+            let show = ui.elements.waterfall_show_ddc.get().unwrap();
+            ui.local_settings.borrow_mut().waterfall_show_ddc = show;
+            // try_borrow_mut prevents trying to update the preferences as a
+            // consequence of the Preferences::apply_client calling this
+            // function
+            if let Ok(mut p) = ui.preferences.try_borrow_mut() {
+                if let Err(e) = p.update_waterfall_show_ddc(&show) {
+                    web_sys::console::error_1(&e);
+                }
+            }
+            let state = ui.api_state.borrow();
+            let Some(state) = state.as_ref() else {
+                web_sys::console::error_1(
+                    &"waterfall_show_ddc_onchange: api_state not available yet".into(),
+                );
+                return;
+            };
+            let input_is_ddc =
+                matches!(state.spectrometer.input, maia_json::SpectrometerInput::DDC);
+            ui.waterfall
+                .borrow_mut()
+                .set_channel_visible(show && !input_is_ddc);
+        })
+    }
+
     waterfallminmax_onchange!(waterfall_min);
     waterfallminmax_onchange!(waterfall_max);
 
@@ -698,7 +735,8 @@ impl Ui {
             waterfall.set_freq_samprate(freq, samp_rate, &mut self.render_engine.borrow_mut())?;
         }
         // update the DDC channel settings
-        waterfall.set_channel_visible(!input_is_ddc);
+        let show_ddc = self.local_settings.borrow().waterfall_show_ddc;
+        waterfall.set_channel_visible(show_ddc && !input_is_ddc);
         waterfall.set_channel_frequency(json.frequency);
         waterfall.set_channel_decimation(json.decimation);
         Ok(())
@@ -722,7 +760,8 @@ impl Ui {
             json.input_sampling_frequency,
             &mut self.render_engine.borrow_mut(),
         )?;
-        waterfall.set_channel_visible(!input_is_ddc);
+        let show_ddc = self.local_settings.borrow().waterfall_show_ddc;
+        waterfall.set_channel_visible(show_ddc && !input_is_ddc);
         waterfall.set_channel_frequency(state.ddc.frequency);
         Ok(())
     }

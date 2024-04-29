@@ -240,18 +240,22 @@ impl WaterfallInteraction {
                     .map(|drag| drag.series_id != series_id)
                     .unwrap_or(true);
                 if new_drag {
-                    // x0 uses client coordinates so we need to shift it according
-                    // to the client coordinates for the canvas origin.
-                    let x0 = x0 - self.canvas.get_bounding_client_rect().x().round() as i32;
-                    let freq = waterfall.get_center_frequency();
-                    let f0 = freq + x0 as f32 * units_per_px - 1.0 / waterfall.get_zoom();
-                    let chan_freq = waterfall.get_channel_frequency_uniform();
-                    let chan_width = waterfall.get_channel_width_uniform();
-                    let inside_channel = (f0 - chan_freq).abs() <= chan_width;
-                    let object = if inside_channel {
-                        DragObject::Channel
-                    } else {
+                    let object = if !waterfall.is_channel_visible() {
                         DragObject::Waterfall
+                    } else {
+                        // x0 uses client coordinates so we need to shift it according
+                        // to the client coordinates for the canvas origin.
+                        let x0 = x0 - self.canvas.get_bounding_client_rect().x().round() as i32;
+                        let freq = waterfall.get_center_frequency();
+                        let f0 = freq + x0 as f32 * units_per_px - 1.0 / waterfall.get_zoom();
+                        let chan_freq = waterfall.get_channel_frequency_uniform();
+                        let chan_width = waterfall.get_channel_width_uniform();
+                        let inside_channel = (f0 - chan_freq).abs() <= chan_width;
+                        if inside_channel {
+                            DragObject::Channel
+                        } else {
+                            DragObject::Waterfall
+                        }
                     };
                     self.drag_series.set(Some(Drag { series_id, object }));
                 }
