@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.5.0 - 2024-05-05
+
+### Added
+
+- DDC
+- Recorder stopping state
+- Version information page
+
+### Changed
+
+- Refactor application state
+
 ## 0.4.0 - 2024-02-23
 
 ### Added
