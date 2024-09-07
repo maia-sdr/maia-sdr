@@ -430,8 +430,8 @@ impl IpCore {
     ///
     /// See [`IpCore::spectrometer_number_integrations`].
     pub fn set_spectrometer_number_integrations(&mut self, value: u32) -> Result<()> {
-        const WIDTH: u8 = maia_pac::maia_sdr::spectrometer::NUM_INTEGRATIONS_W::<
-            maia_pac::maia_sdr::spectrometer::SPECTROMETER_SPEC,
+        const WIDTH: u8 = maia_pac::maia_sdr::spectrometer::NumIntegrationsW::<
+            maia_pac::maia_sdr::spectrometer::SpectrometerSpec,
         >::WIDTH;
         if !(1..1 << WIDTH).contains(&value) {
             anyhow::bail!("invalid number of integrations: {}", value);
