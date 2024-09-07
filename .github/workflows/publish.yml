@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: katyo/publish-crates@9766ec7ed8ebbb0d34168814ecacf51833b6f97d
+      - uses: katyo/publish-crates@v2
         with:
           registry-token: ${{ secrets.registry-token }}
           path: ${{ inputs.path }}
