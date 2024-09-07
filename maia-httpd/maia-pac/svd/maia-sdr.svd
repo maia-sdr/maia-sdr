@@ -4,7 +4,7 @@
   <vendorID>destevez.net</vendorID>
   <name>Maia SDR</name>
   <series>Maia SDR</series>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
   <description>Maia SDR IP core</description>
   <licenseText>SPDX-License-Identifier: MIT Copyright (C) Daniel Estevez 2022-2024</licenseText>
   <width>32</width>
@@ -12,7 +12,7 @@
   <peripherals>
     <peripheral>
       <name>Maia SDR</name>
-      <version>0.5.0</version>
+      <version>0.6.0</version>
       <description>Maia SDR IP core</description>
       <baseAddress>0x00000000</baseAddress>
       <access>read-write</access>
