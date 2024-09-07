@@ -170,11 +170,12 @@ mod render_engine {
                 .get_context("webgl2")?
                 .ok_or("unable to get webgl2 context")?
                 .dyn_into::<WebGl2RenderingContext>()?;
-            gl.get_context_attributes()
-                .ok_or("unable to get webgl2 context attributes")?
-                .alpha(false)
-                .antialias(true)
-                .power_preference(web_sys::WebGlPowerPreference::LowPower);
+            let gl_attrs = gl
+                .get_context_attributes()
+                .ok_or("unable to get webgl2 context attributes")?;
+            gl_attrs.set_alpha(false);
+            gl_attrs.set_antialias(true);
+            gl_attrs.set_power_preference(web_sys::WebGlPowerPreference::LowPower);
             let canvas_dims = CanvasDims::from_canvas_and_window(&canvas, &window);
             let current = Current::new(&gl)?;
 

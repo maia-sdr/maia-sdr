@@ -4,11 +4,11 @@ use wasm_bindgen_futures::JsFuture;
 use web_sys::{Request, RequestInit, Response};
 
 pub fn json_request<T: Serialize>(url: &str, json: &T, method: &str) -> Result<Request, JsValue> {
-    let mut opts = RequestInit::new();
-    opts.method(method);
+    let opts = RequestInit::new();
+    opts.set_method(method);
     let json = serde_json::to_string(json)
         .map_err(|_| format!("unable to format JSON for {method} request"))?;
-    opts.body(Some(&json.into()));
+    opts.set_body(&json.into());
     let request = Request::new_with_str_and_init(url, &opts)?;
     request.headers().set("Content-Type", "application/json")?;
     Ok(request)
@@ -31,6 +31,9 @@ where
 }
 
 pub enum RequestError {
+    // allow(dead_code) included here beacuse the maia_json::Error field is
+    // never read
+    #[allow(dead_code)]
     RequestFailed(maia_json::Error),
     OtherError(JsValue),
 }
