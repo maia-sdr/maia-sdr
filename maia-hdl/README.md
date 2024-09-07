@@ -34,6 +34,10 @@ subdirectory inside the `projects` directory. This will create the Vivado
 project and block diagram, run synthesis and place and route, and finally
 generate the bitstream.
 
+The IP core generation requires [yosys](https://github.com/YosysHQ/yosys), which
+is used to generate Verilog code. Yosys is already included as part of the
+[maia-sdr-devel Docker image](https://github.com/maia-sdr/maia-sdr-docker).
+
 ## Testing
 
 Pure Amaranth tests can be run with
@@ -50,6 +54,8 @@ directory. It is possible to check which tests failed with
 ```
 grep --include=results.xml -r -e failure .
 ```
+
+Running the mixed Amaranth/Verilog tests also requires yosys to be installed.
 
 ## License
 
