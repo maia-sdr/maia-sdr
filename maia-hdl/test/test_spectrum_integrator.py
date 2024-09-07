@@ -45,57 +45,58 @@ class TestSpectrumIntegrator(AmaranthSim):
                               size=(3*integrations + 1)*self.nfft)
             for _ in range(2))
 
-        def set_inputs():
-            yield self.dut0.nint.eq(integrations)
-            yield self.dut0.peak_detect.eq(peak_detect)
+        async def set_inputs(ctx):
+            ctx.set(self.dut0.nint, integrations)
+            ctx.set(self.dut0.peak_detect, peak_detect)
             for j, x in enumerate(zip(re_in, im_in)):
+                await ctx.tick()
                 re = x[0]
                 im = x[1]
-                yield self.dut0.re_in.eq(int(re))
-                yield self.dut0.im_in.eq(int(im))
-                yield self.dut0.input_last.eq(
-                    j % self.nfft == self.nfft - 1)
-                yield self.dut0.clken.eq(1)
-                yield
-                yield self.dut0.clken.eq(0)
-                yield
+                ctx.set(self.dut0.re_in, int(re))
+                ctx.set(self.dut0.im_in, int(im))
+                ctx.set(self.dut0.input_last,
+                        j % self.nfft == self.nfft - 1)
+                ctx.set(self.dut0.clken, 1)
+                await ctx.tick()
+                ctx.set(self.dut0.clken, 0)
 
-        def check_ram_contents():
-            def wait_ready():
+        async def check_ram_contents(ctx):
+            async def wait_ready():
                 while True:
-                    yield
-                    if (yield self.dut0.done):
+                    await ctx.tick()
+                    if ctx.get(self.dut0.done):
                         return
 
-            def check_ram(expected, expected_exponent):
+            async def check_ram(expected, expected_exponent):
                 read = []
-                yield self.dut0.rden.eq(1)
                 for j in range(self.nfft + self.read_delay):
+                    ctx.set(self.dut0.rden, 1)
                     if j < self.nfft:
-                        yield self.dut0.rdaddr.eq(j)
-                    yield
+                        ctx.set(self.dut0.rdaddr, j)
                     if j >= self.read_delay:
                         k = j - self.read_delay
-                        value = yield self.dut0.rdata_value
-                        exponent = yield self.dut0.rdata_exponent
+                        value = ctx.get(self.dut0.rdata_value)
+                        exponent = ctx.get(self.dut0.rdata_exponent)
                         assert value == expected[k], \
                             (f'value = {value}, '
                              f'expected = {expected[k]} @ k = {k}')
                         assert exponent == expected_exponent[k], \
                             (f'exponent = {exponent}, '
                              f'expected = {expected_exponent[k]} @ k = {k}')
+                    await ctx.tick()
+                ctx.set(self.dut0.rden, 0)
 
             # The first run doesn't produce good results, so we don't check
             # anything.
-            yield from wait_ready()
+            await wait_ready()
             for n in range(2):
-                yield from wait_ready()
+                await wait_ready()
                 sel = slice(
                     (n * integrations + 1) * self.nfft,
                     ((n + 1) * integrations + 1) * self.nfft)
                 expected = self.dut0.model(
                     integrations, re_in[sel], im_in[sel], peak_detect)
-                yield from check_ram(*expected)
+                await check_ram(*expected)
 
         self.simulate([set_inputs, check_ram_contents],
                       named_clocks={self.domain_3x: 4e-9})
@@ -116,51 +117,51 @@ class TestSpectrumIntegrator(AmaranthSim):
             self.dut0, [(self.domain_3x, 3, 'common_edge')])
         integrations = 5
 
-        def set_inputs():
-            yield self.dut0.nint.eq(integrations)
-            yield self.dut0.peak_detect.eq(peak_detect)
+        async def set_inputs(ctx):
+            ctx.set(self.dut0.nint, integrations)
+            ctx.set(self.dut0.peak_detect, peak_detect)
             for n in range(10 * integrations):
                 integration_num = (n - 1) // integrations
                 amplitude = 2**(integration_num % 2)
                 for j in range(self.nfft):
-                    yield self.dut0.re_in.eq(0 if j % 2 else amplitude)
-                    yield self.dut0.im_in.eq(amplitude if j % 2 else 0)
-                    yield self.dut0.input_last.eq(
-                        j % self.nfft == self.nfft - 1)
-                    yield self.dut0.clken.eq(1)
-                    yield
-                    yield self.dut0.clken.eq(0)
-                    yield
-                    yield
+                    await ctx.tick()
+                    ctx.set(self.dut0.re_in, 0 if j % 2 else amplitude)
+                    ctx.set(self.dut0.im_in, amplitude if j % 2 else 0)
+                    ctx.set(self.dut0.input_last,
+                            j % self.nfft == self.nfft - 1)
+                    ctx.set(self.dut0.clken, 1)
+                    await ctx.tick()
+                    ctx.set(self.dut0.clken, 0)
 
-        def check_ram_contents():
-            def wait_ready():
+        async def check_ram_contents(ctx):
+            async def wait_ready():
                 while True:
-                    yield
-                    if (yield self.dut0.done):
+                    await ctx.tick()
+                    if ctx.get(self.dut0.done):
                         return
 
-            def check(num_check):
+            async def check(num_check):
                 amplitude = 4**(num_check % 2)
                 expected_out = (amplitude if peak_detect
                                 else integrations * amplitude)
-                yield self.dut0.rden.eq(1)
                 for j in range(self.nfft + self.read_delay):
+                    ctx.set(self.dut0.rden, 1)
                     if j < self.nfft:
-                        yield self.dut0.rdaddr.eq(j)
-                    yield
+                        ctx.set(self.dut0.rdaddr, j)
                     if j >= self.read_delay:
-                        value = yield self.dut0.rdata_value
-                        exponent = yield self.dut0.rdata_exponent
+                        value = ctx.get(self.dut0.rdata_value)
+                        exponent = ctx.get(self.dut0.rdata_exponent)
                         assert value == expected_out
                         assert exponent == 0
+                    await ctx.tick()
+                ctx.set(self.dut0.rden, 0)
 
             # The first run doesn't produce good results, so we don't check
             # anything.
-            yield from wait_ready()
+            await wait_ready()
             for n in range(6):
-                yield from wait_ready()
-                yield from check(n)
+                await wait_ready()
+                await check(n)
 
         self.simulate([set_inputs, check_ram_contents],
                       named_clocks={self.domain_3x: 4e-9}),

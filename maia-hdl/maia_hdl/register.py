@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -89,19 +89,19 @@ class Register(Elaboratable):
 
         self.ren = Signal()
         self.wstrobe = Signal(self.nstrobes)
-        self.rdata = Signal(width, reset=0)
+        self.rdata = Signal(width, init=0)
         self.wdata = Signal(width)
         if interrupt:
             self.interrupt = Signal()
         for field in fields:
             sig = Signal(field.width,
                          name=self._sig_name(field.name),
-                         reset=field.reset)
+                         init=field.reset)
             setattr(self, self._sig_name(field.name), sig)
             if field.access == Access.Rsticky:
                 sig = Signal(field.width,
                              name=self._sig_name_sticky(field.name),
-                             reset=field.reset)
+                             init=field.reset)
                 setattr(self, self._sig_name_sticky(field.name), sig)
 
     def __getitem__(self, name: str) -> Signal:

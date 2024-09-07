@@ -7,6 +7,7 @@
 #
 
 from amaranth import *
+from amaranth.lib.memory import Memory
 import amaranth.cli
 
 import numpy as np
@@ -158,13 +159,12 @@ class SampleBuffer(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        mem = Memory(width=self.w, depth=2**self.aw)
-        m.submodules.rdport0 = rdport0 = mem.read_port(
-            transparent=False)
+        m.submodules.mem = mem = Memory(
+            shape=self.w, depth=2**self.aw, init=[])
+        rdport0 = mem.read_port()
         if self.two_read_ports:
-            m.submodules.rdport1 = rdport1 = mem.read_port(
-                transparent=False)
-        m.submodules.wrport = wrport = mem.write_port()
+            rdport1 = rdport1 = mem.read_port()
+        wrport = mem.write_port()
         m.d.sync += self.rdata0.eq(rdport0.data)
         m.d.comb += [
             rdport0.en.eq(1),
@@ -224,10 +224,10 @@ class Coefficients(Elaboratable):
     def elaborate(self, platform):
         m = Module()
 
-        mem = Memory(width=self.w, depth=2**self.aw)
-        m.submodules.rdport = rdport = mem.read_port(
-            transparent=False)
-        m.submodules.wrport = wrport = mem.write_port()
+        m.submodules.mem = mem = Memory(
+            shape=self.w, depth=2**self.aw, init=[])
+        rdport = mem.read_port()
+        wrport = mem.write_port()
         m.d.sync += self.rdata.eq(rdport.data)
         m.d.comb += [
             rdport.en.eq(1),
@@ -413,11 +413,11 @@ class FIR4DSP(Elaboratable):
 
         write_pointer = Signal(self.len_log2, reset_less=True)
         decimation_counter = Signal(self.decim_width)
-        operation_counter = Signal(self.oper_width, reset=1)
+        operation_counter = Signal(self.oper_width, init=1)
         coeff_counter = Signal(self.len_log2 - 1, reset_less=True)
         sample_addr0 = Signal(self.len_log2, reset_less=True)
         sample_addr1 = Signal(self.len_log2, reset_less=True)
-        work = Signal(reset=1)
+        work = Signal(init=1)
         decimation_end_of_count = Signal(reset_less=True)
         last_operation = Signal(reset_less=True)
         last_acc = Signal(reset_less=True)
@@ -670,10 +670,10 @@ class FIR2DSP(Elaboratable):
 
         write_pointer = Signal(self.len_log2, reset_less=True)
         decimation_counter = Signal(self.decim_width)
-        operation_counter = Signal(self.oper_width, reset=1)
+        operation_counter = Signal(self.oper_width, init=1)
         coeff_counter = Signal(self.len_log2, reset_less=True)
         sample_addr = Signal(self.len_log2, reset_less=True)
-        work = Signal(reset=1)
+        work = Signal(init=1)
         decimation_end_of_count = Signal(reset_less=True)
         last_operation = Signal(reset_less=True)
         last_acc = Signal(reset_less=True)

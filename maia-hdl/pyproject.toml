@@ -1,6 +1,6 @@
 [project]
 name = "maia_hdl"
-version = "0.5.0"
+version = "0.6.0"
 authors = [
   { name="Daniel Estevez", email="daniel@destevez.net" },
 ]
@@ -9,7 +9,7 @@ maintainers = [
 ]
 description = "Maia SDR FPGA Amaranth HDL code"
 readme = "README.md"
-requires-python = ">=3.7"
+requires-python = ">=3.9"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -19,7 +19,7 @@ classifiers = [
     "Topic :: Scientific/Engineering",
 ]
 dependencies = [
-    "amaranth >= 0.4",
+    "amaranth >= 0.5, < 0.6",
     "numpy",
     "scipy",
 ]

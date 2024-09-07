@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -80,7 +80,7 @@ class AxiInterface:
             pass
         else:
             if self.version != AxiVersion.AXI4LITE:
-                self.awid = Signal(ch.id_bits, reset=0, reset_less=True,
+                self.awid = Signal(ch.id_bits, init=0, reset_less=True,
                                    name=self._pin_name('awid'))
                 ports.append(self.awid)
             self.awaddr = Signal(ch.address_bits, reset_less=True,
@@ -88,31 +88,31 @@ class AxiInterface:
             ports.append(self.awaddr)
             if self.version != AxiVersion.AXI4LITE:
                 self.awlen = Signal(
-                    4 if self.version == AxiVersion.AXI3 else 8, reset=0,
+                    4 if self.version == AxiVersion.AXI3 else 8, init=0,
                     reset_less=True, name=self._pin_name('awlen'))
                 ports.append(self.awlen)
                 self.awsize = Signal(
-                    3, reset=int(log2(ch.data_bits // 8)), reset_less=True,
+                    3, init=int(log2(ch.data_bits // 8)), reset_less=True,
                     name=self._pin_name('awsize'))
                 ports.append(self.awsize)
-                self.awburst = Signal(2, reset=0b01, reset_less=True,
+                self.awburst = Signal(2, init=0b01, reset_less=True,
                                       name=self._pin_name('awburst'))
                 ports.append(self.awburst)
                 self.awlock = Signal(
-                    2 if self.version == AxiVersion.AXI3 else 1, reset=0,
+                    2 if self.version == AxiVersion.AXI3 else 1, init=0,
                     reset_less=True, name=self._pin_name('awlock'))
                 ports.append(self.awlock)
-                self.awcache = Signal(4, reset=0b0000, reset_less=True,
+                self.awcache = Signal(4, init=0b0000, reset_less=True,
                                       name=self._pin_name('awcache'))
                 ports.append(self.awcache)
             self.awprot = Signal(3, reset_less=True,
                                  name=self._pin_name('awprot'))
             ports.append(self.awprot)
             if self.version not in [AxiVersion.AXI3, AxiVersion.AXI4LITE]:
-                self.awqos = Signal(4, reset=0b0000, reset_less=True,
+                self.awqos = Signal(4, init=0b0000, reset_less=True,
                                     name=self._pin_name('awqos'))
                 ports.append(self.awqos)
-                self.awregion = Signal(4, reset=0, reset_less=True,
+                self.awregion = Signal(4, init=0, reset_less=True,
                                        name=self._pin_name('awregion'))
                 ports.append(self.awregion)
                 self.awuser = Signal(ch.user_req_width, reset_less=True,
@@ -124,13 +124,13 @@ class AxiInterface:
             ports.append(self.awready)
 
             if self.version == AxiVersion.AXI3:
-                self.wid = Signal(ch.id_bits, reset=0, reset_less=True,
+                self.wid = Signal(ch.id_bits, init=0, reset_less=True,
                                   name=self._pin_name('wid'))
                 ports.append(self.wid)
             self.wdata = Signal(ch.data_bits, reset_less=True,
                                 name=self._pin_name('wdata'))
             ports.append(self.wdata)
-            self.wstrb = Signal(ch.data_bits // 8, reset=-1, reset_less=True,
+            self.wstrb = Signal(ch.data_bits // 8, init=-1, reset_less=True,
                                 name=self._pin_name('wstrb'))
             ports.append(self.wstrb)
             if self.version != AxiVersion.AXI4LITE:
@@ -150,7 +150,7 @@ class AxiInterface:
                 self.bid = Signal(ch.id_bits, reset_less=True,
                                   name=self._pin_name('bid'))
                 ports.append(self.bid)
-            self.bresp = Signal(2, reset=0b00, reset_less=True,
+            self.bresp = Signal(2, init=0b00, reset_less=True,
                                 name=self._pin_name('bresp'))
             ports.append(self.bresp)
             if self.version not in [AxiVersion.AXI3, AxiVersion.AXI4LITE]:
@@ -169,7 +169,7 @@ class AxiInterface:
             pass
         else:
             if self.version != AxiVersion.AXI4LITE:
-                self.arid = Signal(ch.id_bits, reset=0, reset_less=True,
+                self.arid = Signal(ch.id_bits, init=0, reset_less=True,
                                    name=self._pin_name('arid'))
                 ports.append(self.arid)
             self.araddr = Signal(ch.address_bits, reset_less=True,
@@ -177,10 +177,10 @@ class AxiInterface:
             ports.append(self.araddr)
             if self.version != AxiVersion.AXI4LITE:
                 self.arlen = Signal(
-                    4 if self.version == AxiVersion.AXI3 else 8, reset=0,
+                    4 if self.version == AxiVersion.AXI3 else 8, init=0,
                     reset_less=True, name=self._pin_name('arlen'))
                 ports.append(self.arlen)
-                self.arsize = Signal(3, reset=int(log2(ch.data_bits // 8)),
+                self.arsize = Signal(3, init=int(log2(ch.data_bits // 8)),
                                      reset_less=True,
                                      name=self._pin_name('arsize'))
                 ports.append(self.arsize)
@@ -189,20 +189,20 @@ class AxiInterface:
                 ports.append(self.arburst)
                 self.arlock = Signal(2 if self.version == AxiVersion.AXI3
                                      else 1,
-                                     reset=0, reset_less=True,
+                                     init=0, reset_less=True,
                                      name=self._pin_name('arlock'))
                 ports.append(self.arlock)
-                self.arcache = Signal(4, reset=0b0000, reset_less=True,
+                self.arcache = Signal(4, init=0b0000, reset_less=True,
                                       name=self._pin_name('arcache'))
                 ports.append(self.arcache)
             self.arprot = Signal(3, reset_less=True,
                                  name=self._pin_name('arprot'))
             ports.append(self.arprot)
             if self.version not in [AxiVersion.AXI3, AxiVersion.AXI4LITE]:
-                self.arqos = Signal(4, reset=0b0000, reset_less=True,
+                self.arqos = Signal(4, init=0b0000, reset_less=True,
                                     name=self._pin_name('arqos'))
                 ports.append(self.arqos)
-                self.arregion = Signal(4, reset=0x0, reset_less=True,
+                self.arregion = Signal(4, init=0x0, reset_less=True,
                                        name=self._pin_name('arregion'))
                 ports.append(self.arregion)
                 self.aruser = Signal(ch.user_req_width, reset_less=True,
@@ -220,7 +220,7 @@ class AxiInterface:
             self.rdata = Signal(ch.data_bits, reset_less=True,
                                 name=self._pin_name('rdata'))
             ports.append(self.rdata)
-            self.rresp = Signal(2, reset=0b00, reset_less=True,
+            self.rresp = Signal(2, init=0b00, reset_less=True,
                                 name=self._pin_name('rresp'))
             ports.append(self.rresp)
             if self.version != AxiVersion.AXI4LITE:

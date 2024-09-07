@@ -8,7 +8,7 @@
 
 from amaranth import *
 import amaranth.back.verilog
-from amaranth.vendor.xilinx import XilinxPlatform
+from amaranth.vendor import XilinxPlatform
 
 from .pluto_platform import PlutoPlatform
 

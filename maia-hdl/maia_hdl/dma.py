@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -81,7 +81,7 @@ class DmaBRAMWrite(Elaboratable):
             axi.AxiVersion.AXI3, name=name)
         self.start = Signal()
         self.busy = Signal()
-        self.last_buffer = Signal(num_buffers_log2, reset=-1)
+        self.last_buffer = Signal(num_buffers_log2, init=-1)
         # BRAM ports
         self.bram_latency = bram_latency
         self.raddr = Signal(bram_awidth)
@@ -280,7 +280,7 @@ class DmaStreamWrite(Elaboratable):
         axi_addr_counter = Signal(
             range(self.start_address >> addr_shift,
                   (self.end_address >> addr_shift) + 1),
-            reset=axi_addr_counter_reset)
+            init=axi_addr_counter_reset)
         addr_counter_end = Signal()
         b = bin(self.end_address >> addr_shift)
         r = len(b) - len(b.rstrip('0'))  # number of zeros on the right
@@ -327,7 +327,7 @@ class DmaStreamWrite(Elaboratable):
         # outstanding_b contains the number of outstanding write responses - 1
         # in two's complement. This allows us to check 0 outstanding by looking
         # at a single bit and max outstanding by looking at two bits.
-        outstanding_b = Signal(max_outstanding_b_log2 + 2, reset=-1)
+        outstanding_b = Signal(max_outstanding_b_log2 + 2, init=-1)
         no_outstanding_b = outstanding_b[-1]
         full_outstanding_b = ~outstanding_b[-1] & outstanding_b[-2]
         with m.If(self.axi.wlast & self.axi.w_handshake() & ~self.axi.bvalid):
@@ -360,7 +360,7 @@ class DmaStreamWrite(Elaboratable):
                 axi_addr_counter.eq(axi_addr_counter_reset),
             ]
         one_outstanding_burst_q = Signal()
-        no_outstanding_b_q = Signal(reset=1)
+        no_outstanding_b_q = Signal(init=1)
         m.d.sync += [
             no_outstanding_b_q.eq(no_outstanding_b),
             self.finished.eq(

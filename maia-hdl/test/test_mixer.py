@@ -34,17 +34,17 @@ class TestMixer(AmaranthSim):
         expected_re, expected_im = mixer.model(freq, re[skip:], im[skip:])
         go_back = mixer.delay + skip
 
-        def bench():
+        async def bench(ctx):
             for j in range(num_inputs):
-                yield mixer.clken.eq(1)
-                yield mixer.frequency.eq(freq)
-                yield mixer.re_in.eq(int(re[j]))
-                yield mixer.im_in.eq(int(im[j]))
-                yield
+                await ctx.tick()
+                ctx.set(mixer.clken, 1)
+                ctx.set(mixer.frequency, freq)
+                ctx.set(mixer.re_in, int(re[j]))
+                ctx.set(mixer.im_in, int(im[j]))
                 if j >= go_back:
                     out = (
-                        (yield mixer.re_out)
-                        + 1j * (yield mixer.im_out))
+                        ctx.get(mixer.re_out)
+                        + 1j * ctx.get(mixer.im_out))
                     expected = (expected_re[j - go_back]
                                 + 1j * expected_im[j - go_back])
                     assert out == expected, \

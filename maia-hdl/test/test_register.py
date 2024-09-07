@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -25,7 +25,7 @@ class TestRegister(AmaranthSim):
              Field('wpulse_field', Access.Wpulse, 1, 0),
              Field('rsticky_field', Access.Rsticky, 1, 0)],
             interrupt=True)
-        self.readable = Signal(5, reset=17)
+        self.readable = Signal(5, init=17)
         self.interrupt_enable = Signal()
         m.submodules.register = self.register
         m.d.comb += [
@@ -34,136 +34,128 @@ class TestRegister(AmaranthSim):
         ]
 
     def test_initial_value(self):
-        def bench():
-            yield self.register.ren.eq(1)
-            yield
-            read = yield self.register.rdata
+        async def bench(ctx):
+            ctx.set(self.register.ren, 1)
+            await ctx.tick()
+            read = ctx.get(self.register.rdata)
             assert read & (2**7 - 1) == 42
             assert (read >> 7) & (2**5 - 1) == 17
             assert (read >> (7 + 5)) & (2**12 - 1) == 0
             assert read >> (7 + 5 + 12) == 0
-            yield self.register.ren.eq(0)
-            yield
-            assert (yield self.register.rdata) == 0
+            ctx.set(self.register.ren, 0)
+            await ctx.tick()
+            assert ctx.get(self.register.rdata) == 0
 
         self.simulate(bench)
 
     def test_write(self):
-        def bench():
-            yield self.register.wstrobe.eq(0xf)
+        async def bench(ctx):
+            ctx.set(self.register.wstrobe, 0xf)
             value = 0xdeadbeef
-            yield self.register.wdata.eq(value)
-            yield
-            yield self.register.wstrobe.eq(0)
-            yield
-            rw_field = yield self.register['rw_field']
+            ctx.set(self.register.wdata, value)
+            await ctx.tick()
+            ctx.set(self.register.wstrobe, 0)
+            await ctx.tick()
+            rw_field = ctx.get(self.register['rw_field'])
             assert rw_field == value & (2**7 - 1)
-            r_field = yield self.readable
+            r_field = ctx.get(self.readable)
             assert r_field == 17
-            w_field = yield self.register['w_field']
+            w_field = ctx.get(self.register['w_field'])
             assert w_field == (value >> (7 + 5)) & (2**12 - 1)
-            assert (yield self.register.rdata) == 0
-            yield self.register.ren.eq(1)
-            yield
-            yield
-            read = yield self.register.rdata
+            assert ctx.get(self.register.rdata) == 0
+            ctx.set(self.register.ren, 1)
+            await ctx.tick()
+            read = ctx.get(self.register.rdata)
             assert read == (value & (2**7 - 1)) | (17 << 7)
 
         self.simulate(bench)
 
     def test_pulse(self):
-        def bench():
+        async def bench(ctx):
+            await ctx.tick()
             reg = self.register['wpulse_field']
-            yield self.register.wstrobe.eq(0xf)
+            ctx.set(self.register.wstrobe, 0xf)
             value = 1 << (7 + 5 + 12)
-            yield self.register.wdata.eq(value)
-            assert not (yield reg)
-            yield
-            yield self.register.wstrobe.eq(0)
-            assert not (yield reg)
-            yield
-            assert (yield reg)
+            ctx.set(self.register.wdata, value)
+            assert not ctx.get(reg)
+            await ctx.tick()
+            ctx.set(self.register.wstrobe, 0)
+            assert ctx.get(reg)
             for _ in range(10):
-                yield
-                assert not (yield reg)
+                await ctx.tick()
+                assert not ctx.get(reg)
 
         self.simulate(bench)
 
     def test_interrupt(self):
-        def bench():
+        async def bench(ctx):
             for _ in range(4):
-                assert not (yield self.register.interrupt)
-                yield
-            yield self.interrupt_enable.eq(1)
-            assert not (yield self.register.interrupt)
-            yield
-            yield self.interrupt_enable.eq(0)
-            assert not (yield self.register.interrupt)
-            yield
-            assert not (yield self.register.interrupt)
+                assert not ctx.get(self.register.interrupt)
+                await ctx.tick()
+            ctx.set(self.interrupt_enable, 1)
+            assert not ctx.get(self.register.interrupt)
+            await ctx.tick()
+            ctx.set(self.interrupt_enable, 0)
+            assert not ctx.get(self.register.interrupt)
             for _ in range(10):
-                yield
-                assert (yield self.register.interrupt)
-            yield self.register.ren.eq(1)
+                await ctx.tick()
+                assert ctx.get(self.register.interrupt)
+            ctx.set(self.register.ren, 1)
             intr_bit = 7 + 5 + 12 + 1
-            yield
-            assert (yield self.register.interrupt)
-            assert (yield self.register.rdata[intr_bit])
-            yield self.register.ren.eq(0)
-            yield
-            assert (yield self.register.interrupt)
-            yield
+            assert ctx.get(self.register.interrupt)
+            assert ctx.get(self.register.rdata[intr_bit])
+            await ctx.tick()
+            ctx.set(self.register.ren, 0)
+            assert ctx.get(self.register.interrupt)
+            await ctx.tick()
             for _ in range(6):
-                assert not (yield self.register.interrupt)
-                yield
-                assert not (yield self.register.interrupt)
-            yield self.interrupt_enable.eq(1)
-            yield
-            assert not (yield self.register.interrupt)
-            yield self.interrupt_enable.eq(0)
-            yield self.register.ren.eq(1)
-            yield
-            assert not (yield self.register.interrupt)
-            assert (yield self.register.rdata[intr_bit])
-            yield self.register.ren.eq(0)
-            yield
-            assert (yield self.register.interrupt)
-            yield
-            assert not (yield self.register.interrupt)
-            yield
-            assert not (yield self.register.interrupt)
-            yield self.interrupt_enable.eq(1)
-            yield self.register.ren.eq(1)
-            yield
-            assert not (yield self.register.rdata[intr_bit])
-            yield self.interrupt_enable.eq(0)
-            yield self.register.ren.eq(0)
-            yield
-            assert not (yield self.register.interrupt)
-            yield
-            assert (yield self.register.interrupt)
-            yield
-            assert (yield self.register.interrupt)
-            yield self.interrupt_enable.eq(1)
-            yield self.register.ren.eq(1)
-            yield
-            assert (yield self.register.interrupt)
-            yield self.interrupt_enable.eq(0)
-            assert (yield self.register.rdata[intr_bit])
-            yield self.register.ren.eq(0)
-            yield
-            assert (yield self.register.interrupt)
-            yield self.register.ren.eq(1)
-            yield
-            assert (yield self.register.interrupt)
-            assert (yield self.register.rdata[intr_bit])
-            yield self.register.ren.eq(0)
-            yield
-            assert (yield self.register.interrupt)
-            yield
-            assert not (yield self.register.interrupt)
+                assert not ctx.get(self.register.interrupt)
+                await ctx.tick()
+                assert not ctx.get(self.register.interrupt)
+            ctx.set(self.interrupt_enable, 1)
+            await ctx.tick()
+            assert not ctx.get(self.register.interrupt)
+            ctx.set(self.interrupt_enable, 0)
+            ctx.set(self.register.ren, 1)
+            assert not ctx.get(self.register.interrupt)
+            assert ctx.get(self.register.rdata[intr_bit])
+            await ctx.tick()
+            ctx.set(self.register.ren, 0)
+            assert ctx.get(self.register.interrupt)
+            await ctx.tick()
+            assert not ctx.get(self.register.interrupt)
+            await ctx.tick()
+            assert not ctx.get(self.register.interrupt)
+            ctx.set(self.interrupt_enable, 1)
+            ctx.set(self.register.ren, 1)
+            assert not ctx.get(self.register.rdata[intr_bit])
+            await ctx.tick()
+            ctx.set(self.interrupt_enable, 0)
+            ctx.set(self.register.ren, 0)
+            assert not ctx.get(self.register.interrupt)
+            await ctx.tick()
+            assert ctx.get(self.register.interrupt)
+            await ctx.tick()
+            assert ctx.get(self.register.interrupt)
+            ctx.set(self.interrupt_enable, 1)
+            ctx.set(self.register.ren, 1)
+            await ctx.tick()
+            assert ctx.get(self.register.interrupt)
+            ctx.set(self.interrupt_enable, 0)
+            assert ctx.get(self.register.rdata[intr_bit])
+            ctx.set(self.register.ren, 0)
+            await ctx.tick()
+            assert ctx.get(self.register.interrupt)
+            ctx.set(self.register.ren, 1)
+            assert ctx.get(self.register.interrupt)
+            assert ctx.get(self.register.rdata[intr_bit])
+            await ctx.tick()
+            ctx.set(self.register.ren, 0)
+            assert ctx.get(self.register.interrupt)
+            await ctx.tick()
+            assert not ctx.get(self.register.interrupt)
 
-        self.simulate(bench, 'interrupt.vcd')
+        self.simulate(bench)
 
 
 class TestRegisters(AmaranthSim):
@@ -178,59 +170,58 @@ class TestRegisters(AmaranthSim):
             2)
 
     def test_registers(self):
-        def bench():
-            yield self.dut.address.eq(0b10)
-            yield self.dut.ren.eq(1)
-            yield
-            yield self.dut.ren.eq(0)
-            yield
-            assert (yield self.dut.rdone) == 1
-            assert (yield self.dut.rdata) == 6789
-            assert (yield self.dut.wdone) == 0
-            yield
-            assert (yield self.dut.rdone) == 0
-            assert (yield self.dut.rdata) == 0
-            assert (yield self.dut.wdone) == 0
-            yield self.dut.address.eq(0b00)
-            yield self.dut.ren.eq(1)
-            yield
-            yield self.dut.ren.eq(0)
-            yield
-            assert (yield self.dut.rdone) == 1
-            assert (yield self.dut.rdata) == 12345
-            assert (yield self.dut.wdone) == 0
-            yield self.dut.address.eq(0b10)
-            yield self.dut.wstrobe.eq(0x8)
-            yield self.dut.wdata.eq(0xffffffff)
-            yield
-            yield self.dut.wstrobe.eq(0)
-            yield
-            assert (yield self.dut.rdone) == 0
-            assert (yield self.dut.rdata) == 0
-            assert (yield self.dut.wdone) == 1
-            yield self.dut.ren.eq(1)
-            yield
-            yield self.dut.ren.eq(0)
-            yield
-            assert (yield self.dut.rdone) == 1
-            assert (yield self.dut.rdata) == (0xff << 24) | 6789
-            assert (yield self.dut.wdone) == 0
-            yield
-            yield self.dut.address.eq(0b01)
-            yield self.dut.ren.eq(1)
-            yield
-            yield self.dut.ren.eq(0)
-            yield
-            assert (yield self.dut.rdone) == 1
-            assert (yield self.dut.rdata) == 0
-            assert (yield self.dut.wdone) == 0
-            yield self.dut.wstrobe.eq(0xf)
-            yield
-            yield self.dut.wstrobe.eq(0)
-            yield
-            assert (yield self.dut.rdone) == 0
-            assert (yield self.dut.rdata) == 0
-            assert (yield self.dut.wdone) == 1
+        async def bench(ctx):
+            await ctx.tick()
+            ctx.set(self.dut.address, 0b10)
+            ctx.set(self.dut.ren, 1)
+            await ctx.tick()
+            ctx.set(self.dut.ren, 0)
+            assert ctx.get(self.dut.rdone) == 1
+            assert ctx.get(self.dut.rdata) == 6789
+            assert ctx.get(self.dut.wdone) == 0
+            await ctx.tick()
+            assert ctx.get(self.dut.rdone) == 0
+            assert ctx.get(self.dut.rdata) == 0
+            assert ctx.get(self.dut.wdone) == 0
+            await ctx.tick()
+            ctx.set(self.dut.address, 0b00)
+            ctx.set(self.dut.ren, 1)
+            await ctx.tick()
+            ctx.set(self.dut.ren, 0)
+            assert ctx.get(self.dut.rdone) == 1
+            assert ctx.get(self.dut.rdata) == 12345
+            assert ctx.get(self.dut.wdone) == 0
+            await ctx.tick()
+            ctx.set(self.dut.address, 0b10)
+            ctx.set(self.dut.wstrobe, 0x8)
+            ctx.set(self.dut.wdata, 0xffffffff)
+            await ctx.tick()
+            ctx.set(self.dut.wstrobe, 0)
+            assert ctx.get(self.dut.rdone) == 0
+            assert ctx.get(self.dut.rdata) == 0
+            assert ctx.get(self.dut.wdone) == 1
+            await ctx.tick()
+            ctx.set(self.dut.ren, 1)
+            await ctx.tick()
+            ctx.set(self.dut.ren, 0)
+            assert ctx.get(self.dut.rdone) == 1
+            assert ctx.get(self.dut.rdata) == (0xff << 24) | 6789
+            assert ctx.get(self.dut.wdone) == 0
+            await ctx.tick()
+            ctx.set(self.dut.address, 0b01)
+            ctx.set(self.dut.ren, 1)
+            await ctx.tick()
+            ctx.set(self.dut.ren, 0)
+            assert ctx.get(self.dut.rdone) == 1
+            assert ctx.get(self.dut.rdata) == 0
+            assert ctx.get(self.dut.wdone) == 0
+            await ctx.tick()
+            ctx.set(self.dut.wstrobe, 0xf)
+            await ctx.tick()
+            ctx.set(self.dut.wstrobe, 0)
+            assert ctx.get(self.dut.rdone) == 0
+            assert ctx.get(self.dut.rdata) == 0
+            assert ctx.get(self.dut.wdone) == 1
 
         self.simulate(bench)
 

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2023-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -34,17 +34,17 @@ class TestMult2x(AmaranthSim):
         real = np.random.randint(-2**(self.width-1), 2**(self.width-1),
                                  size=num_inputs)
 
-        def bench():
+        async def bench(ctx):
             for j in range(num_inputs):
-                yield self.mult.clken.eq(1)
-                yield self.mult.re_in.eq(int(re[j]))
-                yield self.mult.im_in.eq(int(im[j]))
-                yield self.mult.real_in.eq(int(real[j]))
-                yield
+                await ctx.tick()
+                ctx.set(self.mult.clken, 1)
+                ctx.set(self.mult.re_in, int(re[j]))
+                ctx.set(self.mult.im_in, int(im[j]))
+                ctx.set(self.mult.real_in, int(real[j]))
                 if j >= self.mult.delay:
                     out = (
-                        (yield self.mult.re_out)
-                        + 1j * (yield self.mult.im_out))
+                        ctx.get(self.mult.re_out)
+                        + 1j * ctx.get(self.mult.im_out))
                     expected = (
                         (re[j-self.mult.delay]
                          + 1j * im[j-self.mult.delay])

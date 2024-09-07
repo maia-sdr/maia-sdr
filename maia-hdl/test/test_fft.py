@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -42,30 +42,29 @@ class TestR2SDF(AmaranthSim):
                 n_vec * self.dut.model_vlen)
             for _ in range(2))
 
-        def set_inputs():
+        async def set_inputs(ctx):
             for j in range(re_in.size + self.dut.delay):
-                yield self.dut.clken.eq(1)
+                await ctx.tick()
+                ctx.set(self.dut.clken, 1)
                 if j < re_in.size:
-                    yield self.dut.re_in.eq(int(re_in[j]))
-                    yield self.dut.im_in.eq(int(im_in[j]))
+                    ctx.set(self.dut.re_in, int(re_in[j]))
+                    ctx.set(self.dut.im_in, int(im_in[j]))
                 mux_control = (j // 2**(self.order - 1)) % 2
-                yield self.dut.mux_control.eq(mux_control)
+                ctx.set(self.dut.mux_control, mux_control)
                 if storage == 'bram':
                     waddr = j % 2**(self.order - 1)
                     offset = 1 if not use_bram_reg else 2
-                    yield self.dut.bram_raddr.eq(waddr + offset)
-                    yield self.dut.bram_waddr.eq(waddr)
-                yield
+                    ctx.set(self.dut.bram_raddr, waddr + offset)
+                    ctx.set(self.dut.bram_waddr, waddr)
 
-        def read_outputs():
-            for _ in range(self.dut.delay):
-                yield
+        async def read_outputs(ctx):
+            await ctx.tick().repeat(self.dut.delay)
             re_out, im_out = (
                 np.empty_like(re_in) for _ in range(2))
             for j in range(re_out.size):
-                yield
-                re_out[j] = yield self.dut.re_out
-                im_out[j] = yield self.dut.im_out
+                await ctx.tick()
+                re_out[j] = ctx.get(self.dut.re_out)
+                im_out[j] = ctx.get(self.dut.im_out)
             model_re, model_im = self.dut.model(re_in, im_in)
             np.testing.assert_equal(re_out, model_re,
                                     'real parts do not match')
@@ -100,30 +99,29 @@ class TestR4SDF(AmaranthSim):
                 n_vec * self.dut.model_vlen)
             for _ in range(2))
 
-        def set_inputs():
+        async def set_inputs(ctx):
             for j in range(re_in.size + self.dut.delay):
-                yield self.dut.clken.eq(1)
+                await ctx.tick()
+                ctx.set(self.dut.clken, 1)
                 if j < re_in.size:
-                    yield self.dut.re_in.eq(int(re_in[j]))
-                    yield self.dut.im_in.eq(int(im_in[j]))
+                    ctx.set(self.dut.re_in, int(re_in[j]))
+                    ctx.set(self.dut.im_in, int(im_in[j]))
                 mux_control = (j // 4**(self.order - 1)) % 4 == 3
-                yield self.dut.mux_control.eq(mux_control)
+                ctx.set(self.dut.mux_control, mux_control)
                 if storage == 'bram':
                     waddr = j % 4**(self.order - 1)
                     offset = 1 if not use_bram_reg else 2
-                    yield self.dut.bram_raddr.eq(waddr + offset)
-                    yield self.dut.bram_waddr.eq(waddr)
-                yield
+                    ctx.set(self.dut.bram_raddr, waddr + offset)
+                    ctx.set(self.dut.bram_waddr, waddr)
 
-        def read_outputs():
-            for _ in range(self.dut.delay):
-                yield
+        async def read_outputs(ctx):
+            await ctx.tick().repeat(self.dut.delay)
             re_out, im_out = (
                 np.empty_like(re_in) for _ in range(2))
             for j in range(re_out.size):
-                yield
-                re_out[j] = yield self.dut.re_out
-                im_out[j] = yield self.dut.im_out
+                await ctx.tick()
+                re_out[j] = ctx.get(self.dut.re_out)
+                im_out[j] = ctx.get(self.dut.im_out)
             model_re, model_im = self.dut.model(re_in, im_in)
             np.testing.assert_equal(re_out, model_re,
                                     'real parts do not match')
@@ -158,30 +156,29 @@ class TestR22SDF(AmaranthSim):
                 n_vec * self.dut.model_vlen)
             for _ in range(2))
 
-        def set_inputs():
+        async def set_inputs(ctx):
             for j in range(re_in.size + self.dut.delay):
-                yield self.dut.clken.eq(1)
+                await ctx.tick()
+                ctx.set(self.dut.clken, 1)
                 if j < re_in.size:
-                    yield self.dut.re_in.eq(int(re_in[j]))
-                    yield self.dut.im_in.eq(int(im_in[j]))
+                    ctx.set(self.dut.re_in, int(re_in[j]))
+                    ctx.set(self.dut.im_in, int(im_in[j]))
                 mux_count = (j // 4**(self.order - 1)) % 4
-                yield self.dut.mux_count.eq(mux_count)
+                ctx.set(self.dut.mux_count, mux_count)
                 if storage == 'bram':
                     waddr = j % 2**(2 * self.order - 1)
                     offset = 1 if not use_bram_reg else 2
-                    yield self.dut.bram_raddr.eq(waddr + offset)
-                    yield self.dut.bram_waddr.eq(waddr)
-                yield
+                    ctx.set(self.dut.bram_raddr, waddr + offset)
+                    ctx.set(self.dut.bram_waddr, waddr)
 
-        def read_outputs():
-            for _ in range(self.dut.delay):
-                yield
+        async def read_outputs(ctx):
+            await ctx.tick().repeat(self.dut.delay)
             re_out, im_out = (
                 np.empty_like(re_in) for _ in range(2))
             for j in range(re_out.size):
-                yield
-                re_out[j] = yield self.dut.re_out
-                im_out[j] = yield self.dut.im_out
+                await ctx.tick()
+                re_out[j] = ctx.get(self.dut.re_out)
+                im_out[j] = ctx.get(self.dut.im_out)
             model_re, model_im = self.dut.model(re_in, im_in)
             np.testing.assert_equal(re_out, model_re,
                                     'real parts do not match')
@@ -218,25 +215,24 @@ class TestTwiddle(AmaranthSim):
                 n_vec * self.dut.model_vlen)
             for _ in range(2))
 
-        def set_inputs():
+        async def set_inputs(ctx):
             for j in range(re_in.size + self.dut.delay):
-                yield self.dut.clken.eq(1)
+                await ctx.tick()
+                ctx.set(self.dut.clken, 1)
                 if j < re_in.size:
-                    yield self.dut.re_in.eq(int(re_in[j]))
-                    yield self.dut.im_in.eq(int(im_in[j]))
+                    ctx.set(self.dut.re_in, int(re_in[j]))
+                    ctx.set(self.dut.im_in, int(im_in[j]))
                 twiddle_index = (j + adv) % self.dut.model_vlen
-                yield self.dut.twiddle_index.eq(twiddle_index)
-                yield
+                ctx.set(self.dut.twiddle_index, twiddle_index)
 
-        def read_outputs():
-            for _ in range(self.dut.delay):
-                yield
+        async def read_outputs(ctx):
+            await ctx.tick().repeat(self.dut.delay)
             re_out, im_out = (
                 np.empty_like(re_in) for _ in range(2))
             for j in range(re_out.size):
-                yield
-                re_out[j] = yield self.dut.re_out
-                im_out[j] = yield self.dut.im_out
+                await ctx.tick()
+                re_out[j] = ctx.get(self.dut.re_out)
+                im_out[j] = ctx.get(self.dut.im_out)
             model_re, model_im = self.dut.model(re_in, im_in)
             # The first twiddle_index_advance elements should not be checked
             # because the BRAM read pipeline is still not full, so they produce
@@ -265,26 +261,25 @@ class TestWindow(AmaranthSim):
                 n_vec * self.window.model_vlen)
             for _ in range(2))
 
-        def set_inputs():
+        async def set_inputs(ctx):
             for j in range(re_in.size + self.window.delay):
-                yield self.window.clken.eq(1)
+                await ctx.tick()
+                ctx.set(self.window.clken, 1)
                 if j < re_in.size:
-                    yield self.window.re_in.eq(int(re_in[j]))
-                    yield self.window.im_in.eq(int(im_in[j]))
+                    ctx.set(self.window.re_in, int(re_in[j]))
+                    ctx.set(self.window.im_in, int(im_in[j]))
                 coeff_index = (
                     (j + self.window.coeff_index_advance) % 2**order_log2)
-                yield self.window.coeff_index.eq(coeff_index)
-                yield
+                ctx.set(self.window.coeff_index, coeff_index)
 
-        def read_outputs():
-            for _ in range(self.window.delay):
-                yield
+        async def read_outputs(ctx):
+            await ctx.tick().repeat(self.window.delay)
             re_out, im_out = (
                 np.empty_like(re_in) for _ in range(2))
             for j in range(re_out.size):
-                yield
-                re_out[j] = yield self.window.re_out
-                im_out[j] = yield self.window.im_out
+                await ctx.tick()
+                re_out[j] = ctx.get(self.window.re_out)
+                im_out[j] = ctx.get(self.window.im_out)
             model_re, model_im = self.window.model(re_in, im_in)
             # The first coeff_index_advance elements should not be checked
             # because the BRAM read pipeline is still not full, so they produce
@@ -341,8 +336,8 @@ class TestFFT(AmaranthSim):
         # Dummy simulation, to keep amaranth happy (otherwise amaranth
         # complains that we didn't use the DUT if we only use it to run
         # the model).
-        def dummy():
-            yield
+        async def dummy(ctx):
+            pass
 
         self.simulate(dummy)
 
@@ -473,25 +468,25 @@ class TestFFT(AmaranthSim):
         re_in = [int(a) for a in np.round(input_all).real]
         im_in = [int(a) for a in np.round(input_all).imag]
 
-        def set_inputs():
+        async def set_inputs(ctx):
             for j in range(len(re_in)):
-                yield self.fft.clken.eq(1)
-                yield self.fft.re_in.eq(re_in[j])
-                yield self.fft.im_in.eq(im_in[j])
-                yield
-            yield self.fft.re_in.eq(0)
-            yield self.fft.im_in.eq(0)
+                await ctx.tick()
+                ctx.set(self.fft.clken, 1)
+                ctx.set(self.fft.re_in, re_in[j])
+                ctx.set(self.fft.im_in, im_in[j])
+            await ctx.tick()
+            ctx.set(self.fft.re_in, 0)
+            ctx.set(self.fft.im_in, 0)
 
-        def read_outputs():
-            for _ in range(self.fft.delay):
-                yield
+        async def read_outputs(ctx):
+            await ctx.tick().repeat(self.fft.delay)
             re_out, im_out = (
                 np.empty(input_all.size, 'int') for _ in range(2))
             for j in range(input_all.size):
-                yield
-                re_out[j] = yield self.fft.re_out
-                im_out[j] = yield self.fft.im_out
-                out_last = yield self.fft.out_last
+                await ctx.tick()
+                re_out[j] = ctx.get(self.fft.re_out)
+                im_out[j] = ctx.get(self.fft.im_out)
+                out_last = ctx.get(self.fft.out_last)
                 if j % fft_size == fft_size - 1:
                     assert out_last
                 else:
@@ -505,7 +500,7 @@ class TestFFT(AmaranthSim):
             named_clocks[self.domain_2x] = 6e-9
         if hasattr(self, 'domain_3x'):
             named_clocks[self.domain_3x] = 4e-9
-        self.simulate([set_inputs, read_outputs], vcd,
+        self.simulate([set_inputs, read_outputs], vcd=vcd,
                       named_clocks=named_clocks)
 
 
