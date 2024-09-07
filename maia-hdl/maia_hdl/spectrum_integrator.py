@@ -7,6 +7,7 @@
 #
 
 from amaranth import *
+from amaranth.lib.memory import Memory
 import amaranth.cli
 
 import numpy as np
@@ -161,9 +162,12 @@ class SpectrumIntegrator(Elaboratable):
         m.submodules.common_exp = common_exp = self.common_exp
         m.submodules.cpwr = cpwr = self.cpwr
 
-        mems = [Memory(width=self.sumw+self.ew, depth=2**self.order_log2)
+        mems = [Memory(shape=self.sumw+self.ew, depth=2**self.order_log2,
+                       init=[])
                 for _ in range(2)]
-        rdports = [mem.read_port(transparent=False) for mem in mems]
+        m.submodules.mem0 = mems[0]
+        m.submodules.mem1 = mems[1]
+        rdports = [mem.read_port() for mem in mems]
         # BRAM output register
         rdports_reg = [Signal(self.sumw+self.ew, name=f'rdport{j}_reg',
                               reset_less=True)
@@ -171,11 +175,7 @@ class SpectrumIntegrator(Elaboratable):
         for j in range(2):
             with m.If(rdports[j].en):
                 m.d.sync += rdports_reg[j].eq(rdports[j].data)
-        m.submodules.rdport0 = rdports[0]
-        m.submodules.rdport1 = rdports[1]
         wrports = [mem.write_port() for mem in mems]
-        m.submodules.wrport0 = wrports[0]
-        m.submodules.wrport1 = wrports[1]
 
         # We use the output register on the BRAM.
         mem_delay = 2
@@ -186,10 +186,10 @@ class SpectrumIntegrator(Elaboratable):
         processing_delay = mem_delay + common_exp.delay + cpwr.delay
 
         read_counter_rst = 0
-        read_counter = Signal(self.order_log2, reset=read_counter_rst)
+        read_counter = Signal(self.order_log2, init=read_counter_rst)
         write_counter_rst = (
             (read_counter_rst - processing_delay) % 2**self.order_log2)
-        write_counter = Signal(self.order_log2, reset=write_counter_rst)
+        write_counter = Signal(self.order_log2, init=write_counter_rst)
         sum_counter = Signal(self.nw)
         not_first_sum = Signal()
         not_first_sum_delay = Signal(mem_delay)

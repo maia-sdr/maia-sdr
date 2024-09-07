@@ -29,16 +29,16 @@ class TestIQToFloatingPoint(AmaranthSim):
 
         re_expected, im_expected, exp_expected = self.dut.model(re, im)
 
-        def bench():
+        async def bench(ctx):
             for j in range(num_inputs):
-                yield self.dut.clken.eq(1)
-                yield self.dut.re_in.eq(int(re[j]))
-                yield self.dut.im_in.eq(int(im[j]))
-                yield
+                await ctx.tick()
+                ctx.set(self.dut.clken, 1)
+                ctx.set(self.dut.re_in, int(re[j]))
+                ctx.set(self.dut.im_in, int(im[j]))
                 if j >= self.dut.delay:
-                    re_out = yield self.dut.re_out
-                    im_out = yield self.dut.im_out
-                    exponent_out = yield self.dut.exponent_out
+                    re_out = ctx.get(self.dut.re_out)
+                    im_out = ctx.get(self.dut.im_out)
+                    exponent_out = ctx.get(self.dut.exponent_out)
                     k = j - self.dut.delay
                     assert re_out == re_expected[k], \
                         (f're_out = {re_out}, expected = {re_expected[k]} '
@@ -77,20 +77,20 @@ class TestMakeCommonExponent(AmaranthSim):
             self.dut.model(re_a, im_a, exp_a,
                            b, np.zeros(num_inputs, 'int'), exp_b))
 
-        def bench():
+        async def bench(ctx):
             for j in range(num_inputs):
-                yield self.dut.clken.eq(1)
-                yield self.dut.re_a_in.eq(int(re_a[j]))
-                yield self.dut.im_a_in.eq(int(im_a[j]))
-                yield self.dut.exponent_a_in.eq(int(exp_a[j]))
-                yield self.dut.b_in.eq(int(b[j]))
-                yield self.dut.exponent_b_in.eq(int(exp_b[j]))
-                yield
+                await ctx.tick()
+                ctx.set(self.dut.clken, 1)
+                ctx.set(self.dut.re_a_in, int(re_a[j]))
+                ctx.set(self.dut.im_a_in, int(im_a[j]))
+                ctx.set(self.dut.exponent_a_in, int(exp_a[j]))
+                ctx.set(self.dut.b_in, int(b[j]))
+                ctx.set(self.dut.exponent_b_in, int(exp_b[j]))
                 if j >= self.dut.delay:
-                    re_a_out = yield self.dut.re_a_out
-                    im_a_out = yield self.dut.im_a_out
-                    b_out = yield self.dut.b_out
-                    exponent_out = yield self.dut.exponent_out
+                    re_a_out = ctx.get(self.dut.re_a_out)
+                    im_a_out = ctx.get(self.dut.im_a_out)
+                    b_out = ctx.get(self.dut.b_out)
+                    exponent_out = ctx.get(self.dut.exponent_out)
                     k = j - self.dut.delay
                     assert re_a_out == expected_re_a[k], \
                         (f're_a_out = {re_a_out}, '
@@ -105,7 +105,7 @@ class TestMakeCommonExponent(AmaranthSim):
                         (f'exponent_out = {exponent_out}, '
                          f'expected = {expected_exp[k]} @ cycle = {j}')
 
-        self.simulate(bench, 'make_common_exp.vcd')
+        self.simulate(bench)
 
 
 if __name__ == '__main__':

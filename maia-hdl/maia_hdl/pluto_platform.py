@@ -1,12 +1,12 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
 # SPDX-License-Identifier: MIT
 #
 
-from amaranth.vendor.xilinx import XilinxPlatform
+from amaranth.vendor import XilinxPlatform
 
 
 class PlutoPlatform(XilinxPlatform):

@@ -129,45 +129,46 @@ class TestFIR(AmaranthSim):
         if not hasattr(self, 'max_wait'):
             self.max_wait = 0
 
-        def set_inputs():
+        async def set_inputs(ctx):
             if hasattr(self.dut, 'odd_operations'):
-                yield self.dut.odd_operations.eq(self.odd_operations)
-            yield self.dut.decimation.eq(self.decimation)
-            yield self.dut.operations_minus_one.eq(self.operations - 1)
+                ctx.set(self.dut.odd_operations, self.odd_operations)
+            ctx.set(self.dut.decimation, self.decimation)
+            ctx.set(self.dut.operations_minus_one, self.operations - 1)
 
             # load coefficients
-            yield self.dut.coeff_wren.eq(1)
             for addr, coeff in enumerate(self.coeffs):
-                yield self.dut.coeff_waddr.eq(addr)
-                yield self.dut.coeff_wdata.eq(int(coeff))
-                yield
-            yield self.dut.coeff_wren.eq(0)
+                await ctx.tick()
+                ctx.set(self.dut.coeff_wren, 1)
+                ctx.set(self.dut.coeff_waddr, addr)
+                ctx.set(self.dut.coeff_wdata, int(coeff))
+            await ctx.tick()
+            ctx.set(self.dut.coeff_wren, 0)
 
             # feed samples
             for j, z in enumerate(zip(re_in[drop_samples:],
                                       im_in[drop_samples:])):
                 re, im = z
                 # wait for some time to make sample valid
-                yield self.dut.in_valid.eq(0)
+                ctx.set(self.dut.in_valid, 0)
                 wait_cycles = np.random.randint(self.min_wait,
                                                 self.max_wait + 1)
-                for _ in range(wait_cycles):
-                    yield
-                yield self.dut.in_valid.eq(1)
-                yield self.dut.re_in.eq(int(re))
-                yield self.dut.im_in.eq(int(im))
+                if wait_cycles:
+                    await ctx.tick().repeat(wait_cycles)
+                ctx.set(self.dut.in_valid, 1)
+                ctx.set(self.dut.re_in, int(re))
+                ctx.set(self.dut.im_in, int(im))
                 while True:
-                    yield
-                    if (yield self.dut.in_ready):
+                    await ctx.tick()
+                    if ctx.get(self.dut.in_ready):
                         break
 
-        def check_outputs():
+        async def check_outputs(ctx):
             for j in range(re_out.size):
                 while True:
-                    yield
-                    if (yield self.dut.strobe_out):
-                        re_out[j] = yield self.dut.re_out
-                        im_out[j] = yield self.dut.im_out
+                    await ctx.tick()
+                    if ctx.get(self.dut.strobe_out):
+                        re_out[j] = ctx.get(self.dut.re_out)
+                        im_out[j] = ctx.get(self.dut.im_out)
                         break
             np.testing.assert_equal(re_out, model_re,
                                     'real parts do not match')
@@ -260,33 +261,34 @@ class TestFIRDecimator(AmaranthSim):
 
         nsamples = 25000
 
-        def set_inputs():
-            yield self.dut.decimation1.eq(D1)
-            yield self.dut.decimation2.eq(D2)
-            yield self.dut.decimation3.eq(D3)
-            yield self.dut.bypass2.eq(0)
-            yield self.dut.bypass3.eq(0)
-            yield self.dut.operations_minus_one1.eq(operations1 - 1)
-            yield self.dut.operations_minus_one2.eq(operations2 - 1)
-            yield self.dut.operations_minus_one3.eq(operations3 - 1)
-            yield self.dut.odd_operations1.eq(odd1)
-            yield self.dut.odd_operations3.eq(odd3)
+        async def set_inputs(ctx):
+            ctx.set(self.dut.decimation1, D1)
+            ctx.set(self.dut.decimation2, D2)
+            ctx.set(self.dut.decimation3, D3)
+            ctx.set(self.dut.bypass2, 0)
+            ctx.set(self.dut.bypass3, 0)
+            ctx.set(self.dut.operations_minus_one1, operations1 - 1)
+            ctx.set(self.dut.operations_minus_one2, operations2 - 1)
+            ctx.set(self.dut.operations_minus_one3, operations3 - 1)
+            ctx.set(self.dut.odd_operations1, odd1)
+            ctx.set(self.dut.odd_operations3, odd3)
 
             # load coefficients
-            yield self.dut.coeff_wren.eq(1)
             for addr, coeff in enumerate(coeffs1):
-                yield self.dut.coeff_waddr.eq(addr)
-                yield self.dut.coeff_wdata.eq(int(coeff))
-                yield
+                await ctx.tick()
+                ctx.set(self.dut.coeff_wren, 1)
+                ctx.set(self.dut.coeff_waddr, addr)
+                ctx.set(self.dut.coeff_wdata, int(coeff))
             for addr, coeff in enumerate(coeffs2):
-                yield self.dut.coeff_waddr.eq(addr + 256)
-                yield self.dut.coeff_wdata.eq(int(coeff))
-                yield
+                await ctx.tick()
+                ctx.set(self.dut.coeff_waddr, addr + 256)
+                ctx.set(self.dut.coeff_wdata, int(coeff))
             for addr, coeff in enumerate(coeffs3):
-                yield self.dut.coeff_waddr.eq(addr + 512)
-                yield self.dut.coeff_wdata.eq(int(coeff))
-                yield
-            yield self.dut.coeff_wren.eq(0)
+                await ctx.tick()
+                ctx.set(self.dut.coeff_waddr, addr + 512)
+                ctx.set(self.dut.coeff_wdata, int(coeff))
+            await ctx.tick()
+            ctx.set(self.dut.coeff_wren, 0)
 
             # feed samples
             amplitude = 2**11 - 1
@@ -299,22 +301,22 @@ class TestFIRDecimator(AmaranthSim):
                 freq += dfreq
                 re = int(np.round(amplitude * z.real))
                 im = int(np.round(amplitude * z.imag))
-                yield self.dut.in_valid.eq(1)
-                yield self.dut.re_in.eq(re)
-                yield self.dut.im_in.eq(im)
+                ctx.set(self.dut.in_valid, 1)
+                ctx.set(self.dut.re_in, re)
+                ctx.set(self.dut.im_in, im)
                 while True:
-                    yield
-                    if (yield self.dut.in_ready):
+                    await ctx.tick()
+                    if ctx.get(self.dut.in_ready):
                         break
 
-        def write_output():
+        async def write_output(ctx):
             out = np.zeros(2 * (nsamples // D), 'int16')
             for j in range(out.size // 2):
                 while True:
-                    yield
-                    if (yield self.dut.strobe_out):
-                        out[2 * j] = yield self.dut.re_out
-                        out[2 * j + 1] = yield self.dut.im_out
+                    await ctx.tick()
+                    if ctx.get(self.dut.strobe_out):
+                        out[2 * j] = ctx.get(self.dut.re_out)
+                        out[2 * j + 1] = ctx.get(self.dut.im_out)
                         break
             out.tofile('decimator_out.cs16')
 

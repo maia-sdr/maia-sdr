@@ -7,6 +7,7 @@
 #
 
 from amaranth import *
+from amaranth.lib.memory import Memory
 import amaranth.cli
 
 import numpy as np
@@ -123,16 +124,13 @@ class Mixer(Elaboratable):
         mask = 2**self.exp_width - 1
         cexp_packed = [((re & mask) << self.exp_width) | (im & mask)
                        for re, im in zip(*self.cexp())]
-        cexp_mem = Memory(
-            width=2*self.exp_width,
+        m.submodules.cexp_mem = cexp_mem = Memory(
+            shape=2*self.exp_width,
             depth=len(cexp_packed),
             init=cexp_packed,
             attrs={'ram_style': 'block'},
         )
-        # Use transparent=False because read enable is not supported with
-        # transparent=True (which is the default).
-        m.submodules.rdport = rdport = (
-            cexp_mem.read_port(domain='sync', transparent=False))
+        rdport = cexp_mem.read_port()
         # Use BRAM output register. For some reason this isn't working
         # as expected. Vivado retimes the BRAM and feeds its address
         # with the combinational phase + freq instead of with the

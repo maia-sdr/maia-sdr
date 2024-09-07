@@ -97,7 +97,7 @@ class Pack12IQto32(Elaboratable):
         with m.If(self.strobe_in):
             m.d.sync += [re_q.eq(self.re_in),
                          im_q.eq(self.im_in)]
-        with m.FSM(reset='A'):
+        with m.FSM(init='A'):
             with m.State('A'):
                 with m.If(self.strobe_in):
                     m.next = 'B'

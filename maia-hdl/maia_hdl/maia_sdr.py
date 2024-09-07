@@ -21,7 +21,7 @@ from .recorder import Recorder16IQ, RecorderMode
 from .spectrometer import Spectrometer
 
 # IP core version
-_version = '0.5.0'
+_version = '0.6.0'
 
 
 class MaiaSDR(Elaboratable):
@@ -33,6 +33,11 @@ class MaiaSDR(Elaboratable):
         self.axi4_awidth = 4
         self.s_axi_lite = ClockDomain()
         self.sampling = ClockDomain()
+        # A clock domain called 'sync' is added to override the default
+        # behaviour, since we drive the reset internally.
+        #
+        # See https://github.com/amaranth-lang/amaranth/issues/1506
+        self.sync = ClockDomain()
         self.clk2x = ClockDomain()
         self.clk3x = ClockDomain()
 
@@ -221,6 +226,8 @@ class MaiaSDR(Elaboratable):
                 self.s_axi_lite.clk,
                 self.s_axi_lite.rst,
                 self.sampling.clk,
+                self.sync.clk,
+                self.sync.rst,
                 self.clk2x.clk,
                 self.clk3x.clk,
             ]
@@ -234,6 +241,7 @@ class MaiaSDR(Elaboratable):
         m.domains += [
             self.s_axi_lite,
             self.sampling,
+            self.sync,
             self.clk2x,
             self.clk3x,
         ]
@@ -421,7 +429,7 @@ class MaiaSDR(Elaboratable):
             setattr(m.submodules, f'{internal}_rst', FFSynchronizer(
                 self.control_registers['control']['sdr_reset'],
                 ResetSignal(internal), o_domain=internal,
-                reset=1))
+                init=1))
         m.d.comb += rxiq_cdc.reset.eq(
             self.control_registers['control']['sdr_reset'])
 

@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -208,7 +208,7 @@ class RxIQCDC(Elaboratable):
         # wren is asserted.
         reset_i = Signal()
         m.submodules.sync_reset = FFSynchronizer(
-            self.reset, reset_i, o_domain=self._i_domain, reset=1)
+            self.reset, reset_i, o_domain=self._i_domain, init=1)
 
         m.d.comb += [
             fifo.data_in.eq(Cat(self.re_in, self.im_in)),

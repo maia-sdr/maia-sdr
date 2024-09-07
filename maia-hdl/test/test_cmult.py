@@ -32,18 +32,18 @@ class TestCmult(AmaranthSim):
         im_b = np.random.randint(-2**(self.width-1), 2**(self.width-1),
                                  size=num_inputs)
 
-        def bench():
+        async def bench(ctx):
             for j in range(num_inputs):
-                yield self.dut.clken.eq(1)
-                yield self.dut.re_a.eq(int(re_a[j]))
-                yield self.dut.im_a.eq(int(im_a[j]))
-                yield self.dut.re_b.eq(int(re_b[j]))
-                yield self.dut.im_b.eq(int(im_b[j]))
-                yield
+                await ctx.tick()
+                ctx.set(self.dut.clken, 1)
+                ctx.set(self.dut.re_a, int(re_a[j]))
+                ctx.set(self.dut.im_a, int(im_a[j]))
+                ctx.set(self.dut.re_b, int(re_b[j]))
+                ctx.set(self.dut.im_b, int(im_b[j]))
                 if j >= self.dut.delay:
                     out = (
-                        (yield self.dut.re_out)
-                        + 1j * (yield self.dut.im_out))
+                        ctx.get(self.dut.re_out)
+                        + 1j * ctx.get(self.dut.im_out))
                     expected = (
                         (re_a[j-self.dut.delay]
                          + 1j * im_a[j-self.dut.delay])
@@ -78,18 +78,21 @@ class TestCmult3x(AmaranthSim):
         im_b = np.random.randint(-2**(b_width-1), 2**(b_width-1),
                                  size=num_inputs)
 
-        def bench():
+        async def bench(ctx):
             for j in range(num_inputs):
-                yield cmult.clken.eq(1)
-                yield cmult.re_a.eq(int(re_a[j]))
-                yield cmult.im_a.eq(int(im_a[j]))
-                yield cmult.re_b.eq(int(re_b[j]))
-                yield cmult.im_b.eq(int(im_b[j]))
-                yield
+                await ctx.tick()
+                ctx.set(cmult.clken, 1)
+                ctx.set(cmult.re_a, int(re_a[j]))
+                ctx.set(cmult.im_a, int(im_a[j]))
+                ctx.set(cmult.re_b, int(re_b[j]))
+                ctx.set(cmult.im_b, int(im_b[j]))
+                # wait until a clk3x tick, since im_out is set
+                # a clk3x tick after re_out
+                await ctx.tick('clk3x')
                 if j >= cmult.delay:
                     out = (
-                        (yield cmult.re_out)
-                        + 1j * (yield cmult.im_out))
+                        ctx.get(cmult.re_out)
+                        + 1j * ctx.get(cmult.im_out))
                     expected = (
                         (re_a[j-cmult.delay]
                          + 1j * im_a[j-cmult.delay])
