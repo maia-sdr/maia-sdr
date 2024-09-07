@@ -14,7 +14,7 @@ The crate is built using [svd2rust](https://github.com/rust-embedded/svd2rust).
 
 To generate the Rust code, run
 ```
-svd2rust --target none -i svd/maia-sdr.svd -o src/
+svd2rust --target none -i svd/maia-sdr.svd -o src/ && cargo fmt
 ```
 
 ## API documentation

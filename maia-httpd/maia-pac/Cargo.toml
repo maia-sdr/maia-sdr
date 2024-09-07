@@ -1,6 +1,6 @@
 [package]
 name = "maia-pac"
-version = "0.4.0"
+version = "0.5.0"
 edition = "2021"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR peripheral access crate"
@@ -11,4 +11,5 @@ keywords = ["SDR", "FPGA", "Zynq"]
 categories = ["hardware-support", "science"]
 
 [dependencies]
+critical-section = { version = "1.0", optional = true }
 vcell = "0.1"
