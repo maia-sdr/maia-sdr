@@ -210,7 +210,9 @@ mod render_engine {
         /// with [`RenderEngine::add_object`].
         pub fn render(&mut self) -> Result<(), JsValue> {
             for object in &self.objects {
-                self.current.draw(&self.gl, object)?;
+                if object.enabled.get() {
+                    self.current.draw(&self.gl, object)?;
+                }
             }
             Ok(())
         }

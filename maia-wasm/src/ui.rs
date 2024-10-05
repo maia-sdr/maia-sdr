@@ -56,6 +56,8 @@ pub struct Ui {
 // Defines the 'struct Elements' and its constructor
 ui_elements! {
     colormap_select: HtmlSelectElement => EnumInput<colormap::Colormap>,
+    waterfall_show_waterfall: HtmlInputElement => CheckboxInput,
+    waterfall_show_spectrum: HtmlInputElement => CheckboxInput,
     waterfall_show_ddc: HtmlInputElement => CheckboxInput,
     recorder_button: HtmlButtonElement => Rc<HtmlButtonElement>,
     recorder_button_replica: HtmlButtonElement => Rc<HtmlButtonElement>,
@@ -139,6 +141,8 @@ impl Ui {
             change,
             self,
             colormap_select,
+            waterfall_show_waterfall,
+            waterfall_show_spectrum,
             waterfall_show_ddc,
             waterfall_min,
             waterfall_max,
@@ -668,56 +672,53 @@ impl Ui {
 
 // Waterfall methods
 impl Ui {
-    fn colormap_select_onchange(&self) -> Closure<dyn Fn()> {
-        let ui = self.clone();
-        Closure::new(move || {
-            let colormap = ui.elements.colormap_select.get().unwrap();
-            let mut render_engine = ui.render_engine.borrow_mut();
-            ui.waterfall
-                .borrow()
-                .load_colormap(&mut render_engine, colormap.colormap_as_slice())
-                .unwrap();
-            // try_borrow_mut prevents trying to update the preferences as a
-            // consequence of the Preferences::apply_client calling this
-            // function
-            if let Ok(mut p) = ui.preferences.try_borrow_mut() {
-                if let Err(e) = p.update_colormap_select(&colormap) {
-                    web_sys::console::error_1(&e);
-                }
-            }
-        })
+    onchange_apply!(
+        colormap_select,
+        waterfall_min,
+        waterfall_max,
+        waterfall_show_waterfall,
+        waterfall_show_spectrum,
+        waterfall_show_ddc
+    );
+
+    fn colormap_select_apply(&self, value: colormap::Colormap) {
+        let mut render_engine = self.render_engine.borrow_mut();
+        self.waterfall
+            .borrow()
+            .load_colormap(&mut render_engine, value.colormap_as_slice())
+            .unwrap();
     }
 
-    fn waterfall_show_ddc_onchange(&self) -> Closure<dyn Fn()> {
-        let ui = self.clone();
-        Closure::new(move || {
-            let show = ui.elements.waterfall_show_ddc.get().unwrap();
-            ui.local_settings.borrow_mut().waterfall_show_ddc = show;
-            // try_borrow_mut prevents trying to update the preferences as a
-            // consequence of the Preferences::apply_client calling this
-            // function
-            if let Ok(mut p) = ui.preferences.try_borrow_mut() {
-                if let Err(e) = p.update_waterfall_show_ddc(&show) {
-                    web_sys::console::error_1(&e);
-                }
-            }
-            let state = ui.api_state.borrow();
-            let Some(state) = state.as_ref() else {
-                web_sys::console::error_1(
-                    &"waterfall_show_ddc_onchange: api_state not available yet".into(),
-                );
-                return;
-            };
-            let input_is_ddc =
-                matches!(state.spectrometer.input, maia_json::SpectrometerInput::DDC);
-            ui.waterfall
-                .borrow_mut()
-                .set_channel_visible(show && !input_is_ddc);
-        })
+    fn waterfall_min_apply(&self, value: f32) {
+        self.waterfall.borrow_mut().set_waterfall_min(value);
     }
 
-    waterfallminmax_onchange!(waterfall_min);
-    waterfallminmax_onchange!(waterfall_max);
+    fn waterfall_max_apply(&self, value: f32) {
+        self.waterfall.borrow_mut().set_waterfall_max(value);
+    }
+
+    fn waterfall_show_waterfall_apply(&self, value: bool) {
+        self.waterfall.borrow_mut().set_waterfall_visible(value);
+    }
+
+    fn waterfall_show_spectrum_apply(&self, value: bool) {
+        self.waterfall.borrow_mut().set_spectrum_visible(value);
+    }
+
+    fn waterfall_show_ddc_apply(&self, value: bool) {
+        self.local_settings.borrow_mut().waterfall_show_ddc = value;
+        let state = self.api_state.borrow();
+        let Some(state) = state.as_ref() else {
+            web_sys::console::error_1(
+                &"waterfall_show_ddc_apply: api_state not available yet".into(),
+            );
+            return;
+        };
+        let input_is_ddc = matches!(state.spectrometer.input, maia_json::SpectrometerInput::DDC);
+        self.waterfall
+            .borrow_mut()
+            .set_channel_visible(value && !input_is_ddc);
+    }
 
     fn update_waterfall_ad9361(&self, json: &maia_json::Ad9361) -> Result<(), JsValue> {
         // updates only the frequency
