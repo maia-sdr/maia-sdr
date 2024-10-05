@@ -62,6 +62,8 @@ macro_rules! impl_preference_data {
 
 impl_preference_data! {
     colormap_select: super::colormap::Colormap = super::colormap::Colormap::Turbo,
+    waterfall_show_waterfall: bool = true,
+    waterfall_show_spectrum: bool = false,
     waterfall_show_ddc: bool = true,
     waterfall_min: f32 = 35.0,
     waterfall_max: f32 = 85.0,

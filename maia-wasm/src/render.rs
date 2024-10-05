@@ -23,6 +23,10 @@ mod uniform;
 /// [`RenderEngine::add_object`]. Render objects are drawn using the
 /// `drawElements()` WebGL2 function.
 pub struct RenderObject {
+    /// Controls whether the object is enabled.
+    ///
+    /// If `enabled` is `false`, the object is not rendered.
+    pub enabled: Rc<Cell<bool>>,
     /// WebGL2 program used to render the object.
     pub program: Rc<WebGlProgram>,
     /// VAO storing all the vertex arrays for the object.

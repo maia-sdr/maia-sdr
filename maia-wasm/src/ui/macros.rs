@@ -25,36 +25,38 @@ macro_rules! ui_elements {
     }
 }
 
-macro_rules! waterfallminmax_onchange {
-    ($minmax:ident) => {
+macro_rules! onchange_apply {
+    ($($name:ident),*) => {
         paste::paste! {
-            fn [<$minmax _onchange>](&self) -> Closure<dyn Fn()> {
-                let ui = self.clone();
-                Closure::new(move || {
-                    let element = &ui.elements.$minmax;
-                    if !element.report_validity() {
-                        return;
-                    }
-                    if let Some(value) = element.get() {
-                        ui.waterfall.borrow_mut().[<set_ $minmax>](value);
-                        // try_borrow_mut prevents trying to update the
-                        // preferences as a consequence of the
-                        // Preferences::apply_client calling this closure
-                        if let Ok(mut p) = ui.preferences.try_borrow_mut() {
-                            if let Err(e) = p.[<update_ $minmax>](&value) {
-                                web_sys::console::error_1(&e);
-                            }
+            $(
+                fn [<$name _onchange>](&self) -> Closure<dyn Fn()> {
+                    let ui = self.clone();
+                    Closure::new(move || {
+                        let element = &ui.elements.$name;
+                        if !element.report_validity() {
+                            return;
                         }
-                    } else {
-                        ui.window
-                            .alert_with_message(concat!("Invalid value for ",
-                                                        stringify!($minmax)))
-                            .unwrap();
-                    }
-                })
-            }
+                        if let Some(value) = element.get() {
+                            ui.[<$name _apply>](value);
+                            // try_borrow_mut prevents trying to update the
+                            // preferences as a consequence of the
+                            // Preferences::apply_client calling this closure
+                            if let Ok(mut p) = ui.preferences.try_borrow_mut() {
+                                if let Err(e) = p.[<update_ $name>](&value) {
+                                    web_sys::console::error_1(&e);
+                                }
+                            }
+                        } else {
+                            ui.window
+                                .alert_with_message(concat!("Invalid value for ",
+                                                            stringify!($name)))
+                                .unwrap();
+                        }
+                    })
+                }
+            )*
         }
-    };
+    }
 }
 
 macro_rules! set_on {

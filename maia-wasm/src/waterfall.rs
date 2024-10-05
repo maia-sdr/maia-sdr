@@ -19,6 +19,7 @@ use web_sys::{Performance, WebGlProgram, WebGlTexture, WebGlVertexArrayObject};
 /// [`RenderEngine`] and to modify the parameters of the waterfall.
 pub struct Waterfall {
     texture_map: Box<[f32]>,
+    enables: Enables,
     uniforms: Uniforms,
     textures: Textures,
     programs: Programs,
@@ -40,8 +41,16 @@ pub struct Waterfall {
     zoom_levels: Vec<f32>,
     waterfall_min: f32,
     waterfall_max: f32,
-    // Auxiliary for channel
-    channel_num_idx: Rc<Cell<u32>>,
+}
+
+#[derive(Default)]
+struct Enables {
+    waterfall: Rc<Cell<bool>>,
+    spectrum_background: Rc<Cell<bool>>,
+    spectrum: Rc<Cell<bool>>,
+    frequency_labels: Rc<Cell<bool>>,
+    frequency_ticks: Rc<Cell<bool>>,
+    channel: Rc<Cell<bool>>,
 }
 
 struct Uniforms {
@@ -49,7 +58,11 @@ struct Uniforms {
     center_freq: Rc<Uniform<f32>>,
     zoom: Rc<Uniform<f32>>,
     waterfall_scale_add: Rc<Uniform<f32>>,
+    waterfall_scale_add_floor: Rc<Uniform<f32>>,
     waterfall_scale_mult: Rc<Uniform<f32>>,
+    waterfall_brightness: Rc<Uniform<f32>>,
+    aspect_ratio: Rc<Uniform<f32>>,
+    canvas_width: Rc<Uniform<f32>>,
     freq_labels_width: Rc<Uniform<f32>>,
     freq_labels_height: Rc<Uniform<f32>>,
     major_ticks_end: Rc<Uniform<i32>>,
@@ -84,6 +97,15 @@ impl Waterfall {
     const TEXTURE_WIDTH: usize = 4096;
     const TEXTURE_HEIGHT: usize = 512;
 
+    const SPECTRUM_POINTS: usize = Self::TEXTURE_WIDTH;
+
+    // horizontal divisions are spaced by 1 dB; these cover a 200 dB range,
+    // which is more than enough
+    const HORIZONTAL_DIVISIONS: usize = 200;
+
+    // waterfall brightness when spectrum is visible
+    const WATERFALL_BRIGHTNESS_WITH_SPECTRUM: f32 = 0.7;
+
     /// Creates a new waterfall, adding it to the [`RenderEngine`].
     ///
     /// The `performance` parameter should contain a performance object obtained
@@ -98,6 +120,7 @@ impl Waterfall {
         let center_freq = Self::actual_center_freq(2400e6, samp_rate);
         let mut w = Waterfall {
             texture_map: vec![0.0; Self::TEXTURE_WIDTH * Self::TEXTURE_HEIGHT].into_boxed_slice(),
+            enables: Enables::default(),
             uniforms: Uniforms::new(),
             textures: Textures::new(engine)?,
             programs,
@@ -117,20 +140,31 @@ impl Waterfall {
             freq_num_idx_ticks: Rc::new(Cell::new(0)),
             waterfall_min: 35.0,
             waterfall_max: 85.0,
-            channel_num_idx: Rc::new(Cell::new(0)),
         };
 
+        w.update_canvas_size(engine);
         w.update_waterfall_scale();
         w.load_waterfall(engine)?;
         w.load_colormap(engine, &crate::colormap::turbo::COLORMAP)?;
         let waterfall_object = w.waterfall_object(engine)?;
         engine.add_object(waterfall_object);
+        let spectrum_background_object = w.spectrum_background_object(engine)?;
+        engine.add_object(spectrum_background_object);
+        let horizontal_divisions_object = w.horizontal_divisions_object(engine)?;
+        engine.add_object(horizontal_divisions_object);
+        let spectrum_object = w.spectrum_object(engine)?;
+        engine.add_object(spectrum_object);
         let channel_object = w.channel_object(engine)?;
         engine.add_object(channel_object);
         let (frequency_labels_object, frequency_ticks_object) =
             w.frequency_labels_object(engine)?;
         engine.add_object(frequency_labels_object);
         engine.add_object(frequency_ticks_object);
+
+        w.enables.waterfall.set(true);
+        w.enables.frequency_labels.set(true);
+        w.enables.frequency_ticks.set(true);
+
         Ok(w)
     }
 
@@ -228,7 +262,15 @@ impl Waterfall {
     pub fn resize_canvas(&mut self, engine: &mut RenderEngine) -> Result<(), JsValue> {
         // update frequency labels VAOs and texts texture
         self.frequency_labels_vao(engine)?;
+        self.update_canvas_size(engine);
         Ok(())
+    }
+
+    fn update_canvas_size(&mut self, engine: &mut RenderEngine) {
+        let dims = engine.canvas_dims().css_pixels();
+        let aspect_ratio = f64::from(dims.0) / f64::from(dims.1);
+        self.uniforms.aspect_ratio.set_data(aspect_ratio as f32);
+        self.uniforms.canvas_width.set_data(dims.0 as f32);
     }
 
     /// Updates the waterfall with a new center frequency and sample rate.
@@ -277,20 +319,48 @@ impl Waterfall {
         center_freq + 0.5 * fft_bin_hz
     }
 
+    /// Returns whether the waterfall is visible.
+    pub fn is_waterfall_visible(&self) -> bool {
+        self.enables.waterfall.get()
+    }
+
+    /// Sets whether the waterfall is visible.
+    ///
+    /// By default the waterfall is visible.
+    pub fn set_waterfall_visible(&self, visible: bool) {
+        self.enables.waterfall.set(visible);
+        self.enables.spectrum_background.set(!visible);
+    }
+
+    /// Returns whether the spectrum is visible.
+    pub fn is_spectrum_visible(&self) -> bool {
+        self.enables.spectrum.get()
+    }
+
+    /// Sets whether the spectrum is visible.
+    ///
+    /// By default the spectrum is not visible.
+    pub fn set_spectrum_visible(&self, visible: bool) {
+        self.enables.spectrum.set(visible);
+        // darken waterfall slightly if the spectrum is visible to make the
+        // spectrum more clear
+        self.uniforms.waterfall_brightness.set_data(if visible {
+            Self::WATERFALL_BRIGHTNESS_WITH_SPECTRUM
+        } else {
+            1.0
+        });
+    }
+
     /// Returns whether the DDC channel is visible in the waterfall.
     pub fn is_channel_visible(&self) -> bool {
-        self.channel_num_idx.get() != 0
+        self.enables.channel.get()
     }
 
     /// Sets whether the DDC channel is visible in the waterfall.
     ///
     /// By default the channel is not visible.
     pub fn set_channel_visible(&self, visible: bool) {
-        self.channel_num_idx.set(if visible {
-            Self::RECTANGLE_NUM_INDICES as u32
-        } else {
-            0
-        });
+        self.enables.channel.set(visible);
     }
 
     /// Returns the frequency of the DDC channel in the waterfall.
@@ -308,7 +378,7 @@ impl Waterfall {
     /// center frequency.
     ///
     /// This funciton must also be called when the sample rate is changed using
-    /// [Self::set_freq_samp_rate].
+    /// `[Self::set_freq_samprate]`.
     pub fn set_channel_frequency(&mut self, frequency: f64) {
         // The range for frequency is [-1, 1], so we need to multiply by 2.
         let frequency = 2.0 * frequency / self.samp_rate;
@@ -328,13 +398,47 @@ impl Waterfall {
         let program = Self::waterfall_program(engine)?;
         let vao = self.waterfall_vao(engine, &program)?;
         Ok(RenderObject {
+            enabled: Rc::clone(&self.enables.waterfall),
             program,
             vao,
             draw_mode: DrawMode::Triangles,
             draw_num_indices: Rc::new(Cell::new(Self::NUM_INDICES as u32)),
             draw_offset_elements: Rc::new(Cell::new(0)),
             uniforms: self.uniforms.waterfall_uniforms(),
-            textures: self.textures.render_object_textures(),
+            textures: self.textures.waterfall_textures(),
+        })
+    }
+
+    fn spectrum_background_object(
+        &self,
+        engine: &mut RenderEngine,
+    ) -> Result<RenderObject, JsValue> {
+        let program = Self::spectrum_background_program(engine)?;
+        let vao = self.rectangle_vao(engine, &program)?;
+        Ok(RenderObject {
+            enabled: Rc::clone(&self.enables.spectrum_background),
+            program,
+            vao,
+            draw_mode: DrawMode::Triangles,
+            draw_num_indices: Rc::new(Cell::new(Self::RECTANGLE_NUM_INDICES as u32)),
+            draw_offset_elements: Rc::new(Cell::new(0)),
+            uniforms: Box::new([]),
+            textures: Box::new([]),
+        })
+    }
+
+    fn spectrum_object(&self, engine: &mut RenderEngine) -> Result<RenderObject, JsValue> {
+        let program = Self::spectrum_program(engine)?;
+        let vao = self.spectrum_vao(engine, &program)?;
+        Ok(RenderObject {
+            enabled: Rc::clone(&self.enables.spectrum),
+            program,
+            vao,
+            draw_mode: DrawMode::Triangles,
+            draw_num_indices: Rc::new(Cell::new(6 * (Self::SPECTRUM_POINTS - 1) as u32)),
+            draw_offset_elements: Rc::new(Cell::new(0)),
+            uniforms: self.uniforms.spectrum_uniforms(),
+            textures: self.textures.spectrum_textures(),
         })
     }
 
@@ -345,6 +449,7 @@ impl Waterfall {
         let (vao_labels, vao_ticks) = self.frequency_labels_vao(engine)?;
 
         let object_labels = RenderObject {
+            enabled: Rc::clone(&self.enables.frequency_labels),
             program: Rc::clone(&self.programs.frequency_labels),
             vao: vao_labels,
             draw_mode: DrawMode::Triangles,
@@ -354,6 +459,7 @@ impl Waterfall {
             textures: self.textures.text_textures(),
         };
         let object_ticks = RenderObject {
+            enabled: Rc::clone(&self.enables.frequency_ticks),
             program: Rc::clone(&self.programs.frequency_ticks),
             vao: vao_ticks,
             draw_mode: DrawMode::Lines,
@@ -365,14 +471,33 @@ impl Waterfall {
         Ok((object_labels, object_ticks))
     }
 
+    fn horizontal_divisions_object(
+        &mut self,
+        engine: &mut RenderEngine,
+    ) -> Result<RenderObject, JsValue> {
+        let program = Self::horizontal_divisions_program(engine)?;
+        let vao = self.horizontal_divisions_vao(engine, &program)?;
+        Ok(RenderObject {
+            enabled: Rc::clone(&self.enables.spectrum),
+            program,
+            vao,
+            draw_mode: DrawMode::Lines,
+            draw_num_indices: Rc::new(Cell::new(2 * Self::HORIZONTAL_DIVISIONS as u32)),
+            draw_offset_elements: Rc::new(Cell::new(0)),
+            uniforms: self.uniforms.horizontal_divisions_uniforms(),
+            textures: Box::new([]),
+        })
+    }
+
     fn channel_object(&self, engine: &mut RenderEngine) -> Result<RenderObject, JsValue> {
         let program = Self::channel_program(engine)?;
-        let vao = self.channel_vao(engine, &program)?;
+        let vao = self.rectangle_vao(engine, &program)?;
         Ok(RenderObject {
+            enabled: Rc::clone(&self.enables.channel),
             program,
             vao,
             draw_mode: DrawMode::Triangles,
-            draw_num_indices: Rc::clone(&self.channel_num_idx),
+            draw_num_indices: Rc::new(Cell::new(Self::RECTANGLE_NUM_INDICES as u32)),
             draw_offset_elements: Rc::new(Cell::new(0)),
             uniforms: self.uniforms.channel_uniforms(),
             textures: Box::new([]),
@@ -394,31 +519,92 @@ impl Waterfall {
                                0.0, 1.0);
             vTextureCoordinates = aTextureCoordinates;
         }"#,
-            fragment_shader: concat!(
-                r#"#version 300 es
+            fragment_shader: r#"#version 300 es
         precision highp float;
-            "#,
-                include_str!("turbo_colormap.glsl"),
-                r#"
         in vec2 vTextureCoordinates;
         uniform sampler2D uSampler;
         uniform sampler2D uColormapSampler;
         uniform float uWaterfallScaleAdd;
         uniform float uWaterfallScaleMult;
+        uniform float uWaterfallBrightness;
         out vec4 color;
         void main() {
             float power = texture(uSampler, vTextureCoordinates).x;
-
-            // Use polynomial approximation of Turbo colormap
-            // color = vec4(TurboColormap(power), 1.0);
-
-            // Use colormap texture
             float normalizedPower = uWaterfallScaleMult * (power + uWaterfallScaleAdd);
-            color = texture(uColormapSampler, vec2(normalizedPower, 0.0));
+            color = texture(uColormapSampler, vec2(normalizedPower, 0.0))
+                    * vec4(vec3(uWaterfallBrightness), 1.0);
         }"#,
-            ),
         };
+        engine.make_program(source)
+    }
 
+    fn spectrum_background_program(engine: &RenderEngine) -> Result<Rc<WebGlProgram>, JsValue> {
+        let source = ProgramSource {
+            vertex_shader: r#"#version 300 es
+        in vec2 aPosition;
+        void main() {
+            gl_Position = vec4(aPosition.xy, 0.0, 1.0);
+        }"#,
+            fragment_shader: r#"#version 300 es
+        precision highp float;
+        out vec4 color;
+        void main() {
+            color = vec4(vec3(0.1333), 1.0);
+        }"#,
+        };
+        engine.make_program(source)
+    }
+
+    fn spectrum_program(engine: &RenderEngine) -> Result<Rc<WebGlProgram>, JsValue> {
+        let source = ProgramSource {
+            vertex_shader: &format!(
+                r#"#version 300 es
+        in vec2 aPosition;
+        uniform sampler2D uSampler;
+        uniform float uTimeTranslation;
+        uniform float uCenterFreq;
+        uniform float uZoom;
+        uniform float uWaterfallScaleAdd;
+        uniform float uWaterfallScaleMult;
+        uniform float uAspectRatio;
+        uniform float uCanvasWidth;
+        out float vSignedDistance;
+        void main() {{
+            vec2 texturePosition = vec2(0.5 * (aPosition.x + 1.0), 0.25 * uTimeTranslation);
+            float delta = 1.0 / {0:.3};
+            vec2 textureNeighLeft = vec2(texturePosition.x - delta, texturePosition.y);
+            vec2 textureNeighRight = vec2(texturePosition.x + delta, texturePosition.y);
+            float power = texture(uSampler, texturePosition).x;
+            float powerLeft = texture(uSampler, textureNeighLeft).x;
+            float powerRight = texture(uSampler, textureNeighRight).x;
+            float normalizedPower = 2.0 * uWaterfallScaleMult * (power + uWaterfallScaleAdd) - 1.0;
+            float normalizedPowerLeft = 2.0 * uWaterfallScaleMult * (powerLeft + uWaterfallScaleAdd) - 1.0;
+            float normalizedPowerRight = 2.0 * uWaterfallScaleMult * (powerRight + uWaterfallScaleAdd) - 1.0;
+
+            float deltaScreen = uZoom * 2.0 / {0:.3} * uAspectRatio;
+            vec2 leftNormal = normalize(vec2(normalizedPowerLeft - normalizedPower, deltaScreen));
+            vec2 rightNormal = normalize(vec2(normalizedPower - normalizedPowerRight, deltaScreen));
+            vec2 normal = normalize(leftNormal + rightNormal);
+            float maxMiter = 10.0;
+            float miter = min(maxMiter, sqrt(2.0 / (1.0 + dot(leftNormal, rightNormal))));
+
+            vec2 position = vec2(uZoom * (aPosition.x - uCenterFreq), normalizedPower);
+            float thickness = 2.0;
+            vec2 positionExpand = position + thickness / uCanvasWidth * aPosition.y * miter * normal * vec2(1.0, uAspectRatio);
+            gl_Position = vec4(positionExpand, 0.0, 1.0);
+            vSignedDistance = aPosition.y;
+        }}"#,
+                (Self::TEXTURE_WIDTH - 1) as f32
+            ),
+            fragment_shader: r#"#version 300 es
+        precision highp float;
+        in float vSignedDistance;
+        out vec4 color;
+        void main() {
+            float alpha = 1.0 - vSignedDistance * vSignedDistance;
+            color = vec4(alpha);
+        }"#,
+        };
         engine.make_program(source)
     }
 
@@ -439,7 +625,6 @@ impl Waterfall {
         }"#,
             fragment_shader: r#"#version 300 es
         precision highp float;
-        in float vBrightness;
         out vec4 color;
         void main() {
             color = vec4(1.0);
@@ -474,6 +659,38 @@ impl Waterfall {
         out vec4 color;
         void main() {
             color = texture(uSampler, vTextureCoordinates);
+        }"#,
+        };
+        engine.make_program(source)
+    }
+
+    fn horizontal_divisions_program(engine: &RenderEngine) -> Result<Rc<WebGlProgram>, JsValue> {
+        let source = ProgramSource {
+            vertex_shader: r#"#version 300 es
+        in vec2 aPosition;
+        uniform float uWaterfallScaleAdd;
+        uniform float uWaterfallScaleAddFloor;
+        uniform float uWaterfallScaleMult;
+        out float vAlpha;
+        void main() {
+            bool majorDivision = (gl_VertexID >> 1) % 10 == 0;
+            vAlpha = float(majorDivision) * 0.4 + 0.4;
+            // power is in units of 10 dB, because the conversion to power does not include
+            // the 10 factor in the 10*log10 formula
+            //
+            // subtracting uWaterfallScaleAddFloor + 1.0 ensures that power >= 0 for most of
+            // the horizontal divisions, so that few of them are hidden below the lower edge
+            // of the screen
+            float power = aPosition.y - uWaterfallScaleAddFloor - 1.0;
+            float normalizedPower = 2.0 * uWaterfallScaleMult * (power + uWaterfallScaleAdd) - 1.0;
+            gl_Position = vec4(aPosition.x, normalizedPower, 0.0, 1.0);
+        }"#,
+            fragment_shader: r#"#version 300 es
+        precision highp float;
+        in float vAlpha;
+        out vec4 color;
+        void main() {
+            color = vec4(vAlpha);
         }"#,
         };
         engine.make_program(source)
@@ -538,6 +755,29 @@ impl Waterfall {
             .create_vao()?
             .create_array_buffer(program, "aPosition", 2, &vertices)?
             .create_array_buffer(program, "aTextureCoordinates", 2, &texture_coordinates)?
+            .create_element_array_buffer(&indices)?
+            .build();
+        Ok(vao)
+    }
+
+    fn spectrum_vao(
+        &self,
+        engine: &mut RenderEngine,
+        program: &WebGlProgram,
+    ) -> Result<Rc<WebGlVertexArrayObject>, JsValue> {
+        let step = 2.0 / (Self::SPECTRUM_POINTS - 1) as f64;
+        let vertices: Vec<f32> = (0..Self::SPECTRUM_POINTS)
+            .flat_map(|j| {
+                let x = (-1.0 + step * j as f64) as f32;
+                [x, -1.0, x, 1.0]
+            })
+            .collect();
+        let indices: Vec<u16> = (0..2 * u16::try_from(Self::SPECTRUM_POINTS).unwrap() - 2)
+            .flat_map(|j| [j, j + 1, j + 2])
+            .collect();
+        let vao = engine
+            .create_vao()?
+            .create_array_buffer(program, "aPosition", 2, &vertices)?
             .create_element_array_buffer(&indices)?
             .build();
         Ok(vao)
@@ -727,7 +967,26 @@ impl Waterfall {
         Ok((vao_labels, vao_ticks))
     }
 
-    fn channel_vao(
+    fn horizontal_divisions_vao(
+        &self,
+        engine: &mut RenderEngine,
+        program: &WebGlProgram,
+    ) -> Result<Rc<WebGlVertexArrayObject>, JsValue> {
+        // 1 dB separation in the divisions. The power is in units of 10 dB, so
+        // we space the y coordinates by 0.1
+        let vertices: Vec<f32> = (0..Self::HORIZONTAL_DIVISIONS)
+            .flat_map(|j| [-1.0, 0.1 * j as f32, 1.0, 0.1 * j as f32])
+            .collect();
+        let indices: Vec<u16> = (0..vertices.len()).map(|x| x as u16).collect();
+        let vao = engine
+            .create_vao()?
+            .create_array_buffer(program, "aPosition", 2, &vertices)?
+            .create_element_array_buffer(&indices)?
+            .build();
+        Ok(vao)
+    }
+
+    fn rectangle_vao(
         &self,
         engine: &mut RenderEngine,
         program: &WebGlProgram,
@@ -843,9 +1102,13 @@ impl Waterfall {
     }
 
     fn update_waterfall_scale(&mut self) {
+        let waterfall_scale_add = -self.waterfall_min * 0.1;
         self.uniforms
             .waterfall_scale_add
-            .set_data(-self.waterfall_min * 0.1);
+            .set_data(waterfall_scale_add);
+        self.uniforms
+            .waterfall_scale_add_floor
+            .set_data(waterfall_scale_add.floor());
         self.uniforms
             .waterfall_scale_mult
             .set_data(10.0 / (self.waterfall_max - self.waterfall_min));
@@ -907,11 +1170,18 @@ impl Textures {
         Ok(())
     }
 
-    fn render_object_textures(&self) -> Box<[Texture]> {
+    fn waterfall_textures(&self) -> Box<[Texture]> {
         Box::new([
             Texture::new(String::from("uSampler"), Rc::clone(&self.waterfall)),
             Texture::new(String::from("uColormapSampler"), Rc::clone(&self.colormap)),
         ])
+    }
+
+    fn spectrum_textures(&self) -> Box<[Texture]> {
+        Box::new([Texture::new(
+            String::from("uSampler"),
+            Rc::clone(&self.waterfall),
+        )])
     }
 
     fn text_textures(&self) -> Box<[Texture]> {
@@ -929,7 +1199,14 @@ impl Uniforms {
             center_freq: Rc::new(Uniform::new(String::from("uCenterFreq"), 0.0)),
             zoom: Rc::new(Uniform::new(String::from("uZoom"), 1.0)),
             waterfall_scale_add: Rc::new(Uniform::new(String::from("uWaterfallScaleAdd"), 0.0)),
+            waterfall_scale_add_floor: Rc::new(Uniform::new(
+                String::from("uWaterfallScaleAddFloor"),
+                0.0,
+            )),
             waterfall_scale_mult: Rc::new(Uniform::new(String::from("uWaterfallScaleMult"), 0.0)),
+            waterfall_brightness: Rc::new(Uniform::new(String::from("uWaterfallBrightness"), 1.0)),
+            aspect_ratio: Rc::new(Uniform::new(String::from("uAspectRatio"), 0.0)),
+            canvas_width: Rc::new(Uniform::new(String::from("uCanvasWidth"), 0.0)),
             freq_labels_width: Rc::new(Uniform::new(
                 String::from("uLabelWidth"),
                 Default::default(),
@@ -954,6 +1231,19 @@ impl Uniforms {
             Rc::clone(&self.zoom) as _,
             Rc::clone(&self.waterfall_scale_add) as _,
             Rc::clone(&self.waterfall_scale_mult) as _,
+            Rc::clone(&self.waterfall_brightness) as _,
+        ])
+    }
+
+    fn spectrum_uniforms(&self) -> Box<[Rc<dyn UniformValue>]> {
+        Box::new([
+            Rc::clone(&self.time_translation) as _,
+            Rc::clone(&self.center_freq) as _,
+            Rc::clone(&self.zoom) as _,
+            Rc::clone(&self.waterfall_scale_add) as _,
+            Rc::clone(&self.waterfall_scale_mult) as _,
+            Rc::clone(&self.aspect_ratio) as _,
+            Rc::clone(&self.canvas_width) as _,
         ])
     }
 
@@ -971,6 +1261,14 @@ impl Uniforms {
             Rc::clone(&self.zoom) as _,
             Rc::clone(&self.freq_labels_width) as _,
             Rc::clone(&self.freq_labels_height) as _,
+        ])
+    }
+
+    fn horizontal_divisions_uniforms(&self) -> Box<[Rc<dyn UniformValue>]> {
+        Box::new([
+            Rc::clone(&self.waterfall_scale_add) as _,
+            Rc::clone(&self.waterfall_scale_add_floor) as _,
+            Rc::clone(&self.waterfall_scale_mult) as _,
         ])
     }
 
