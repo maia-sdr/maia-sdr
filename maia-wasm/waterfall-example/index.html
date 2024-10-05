@@ -4,9 +4,32 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1">
     <title>Maia SDR waterfall example</title>
+    <link rel="stylesheet" href="./style.css">
     <script type="module" src="./index.js"></script>
   </head>
   <body>
-    <canvas id="waterfall" style="width: 100%; height: 80vh; touch-action: none;"></canvas>
+    <div class="main_screen">
+      <canvas id="waterfall"></canvas>
+      <form class="ui">
+        <fieldset class="waterfall_levels">
+          <label for="waterfall_min">Waterfall min</label>/<label for="waterfall_max">max</label>
+          <input type="number" id="waterfall_min" value="25" step="1" min="0">
+          <input type="number" id="waterfall_max" value="95" step="1" min="0">
+        </fieldset>
+        <label>Colormap
+          <select id="colormap_select">
+            <option>Turbo</option>
+            <option>Viridis</option>
+            <option>Inferno</option>
+          </select>
+        </label>
+        <label>Show waterfall
+          <input type="checkbox" id="waterfall_show_waterfall" checked>
+        </label>
+        <label>Show spectrum
+          <input type="checkbox" id="waterfall_show_spectrum">
+        </label>
+      </form>
+    </div>
   </body>
 </html>

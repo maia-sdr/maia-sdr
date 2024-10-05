@@ -20,13 +20,13 @@ use crate::waterfall::Waterfall;
 use active::IsElementActive;
 use input::{CheckboxInput, EnumInput, InputElement, NumberInput, NumberSpan, TextInput};
 
-mod active;
-mod colormap;
-mod input;
+pub mod active;
+pub mod colormap;
+pub mod input;
 #[macro_use]
-mod macros;
+pub mod macros;
 mod preferences;
-mod request;
+pub mod request;
 
 const API_URL: &str = "/api";
 const AD9361_URL: &str = "/api/ad9361";
