@@ -1,0 +1,191 @@
+/* Color schemes */
+
+/* Default light mode */
+:root {
+    --background-color: white;
+    --text-color: black;
+    --line-color: black;
+
+    --focus-outline-color: rgba(208, 208, 255, 0.5);
+
+    --input-bg-color: #f8f8f8;
+    --input-highlight-color: #e8e8ff;
+    --input-bg-invalid-color: #ffb0b0;
+
+    --button-color: #ddd;
+    --button-highlight-color: #bbb;
+
+    /* Record button */
+    --record-color: #9d9;
+    --record-highlight-color: #7b7;
+    --stop-color: #d99;
+    --stop-highlight-color: #b77;
+    --stopping-color: #dd9;
+}
+
+@media (prefers-color-scheme: dark) {
+    /* Dark mode */
+    :root {
+        --background-color: black;
+        --text-color: white;
+        --line-color: white;
+
+        --focus-outline-color: rgba(208, 208, 255, 0.5);
+
+        --input-bg-color: #222;
+        --input-highlight-color: #227;
+        --input-bg-invalid-color: #ffb0b0;
+
+        --button-color: #444;
+        --button-highlight-color: #777;
+
+        /* Record button */
+        --record-color: #7b7;
+        --record-highlight-color: #9d9;
+        --stop-color: #b77;
+        --stop-highlight-color: #d99;
+        --stopping-color: #bb7;
+    }
+}
+
+/* Focus outline */
+
+:root {
+    --focus-outline: 3px solid var(--focus-outline-color);
+}
+
+/* Top level rules */
+
+body {
+    user-select: none;
+    -webkit-user-select: none; /* Safari */
+    -ms-user-select: none; /* IE 10+ */
+}
+
+/* The main screen is a flex formed by the waterfall canvas and the UI form. The
+waterfall grows as needed so that at least all the viewport is used
+vertically. The flex can be larger if the UI form needs to overflow past the end
+of the screen, since the waterfall has a minimum height of 75vh. */
+.main_screen {
+    display: flex;
+    flex-flow: column;
+    min-height: 100vh;
+}
+
+#waterfall {
+    touch-action: none;
+    width: 100vw;
+    height: 0; /* all the canvas height comes from growing the flex */
+    flex: 1 0 75vh;
+}
+
+html {
+    font-family: Helvetica, Arial, sans-serif;
+}
+
+body {
+    margin: 0px 0px 0px 0px;
+    padding: 0px 0px 0px 0px;
+    background-color: var(--background-color);
+    color: var(--text-color);
+}
+
+/* Forms */
+
+/* Reset forms properties that are sometimes overridden by browsers */
+
+button,
+input,
+select,
+textarea {
+    font-family: inherit;
+    font-size: 100%;
+    box-sizing: border-box;
+    padding: 0;
+    margin: 0;
+    outline: none;
+}
+
+textarea {
+    overflow: auto;
+}
+
+/* Forms styling */
+
+button,
+input,
+select,
+textarea {
+    color: var(--text-color);
+    border: 1px solid var(--line-color);
+    padding: 2px;
+}
+
+input,
+textarea {
+    background-color: var(--input-bg-color);
+}
+
+button,
+select {
+    background-color: var(--button-color);
+}
+
+a:focus,
+button:focus,
+select:focus {
+    outline: var(--focus-outline);
+}
+
+input:focus {
+    background-color: var(--input-highlight-color);
+}
+
+button:hover,
+select:hover {
+    background-color: var(--button-highlight-color);
+}
+
+input:invalid {
+    background-color: var(--input-bg-invalid-color);
+}
+
+.link_button {
+    color: var(--text-color);
+    text-decoration: none;
+    text-align: center;
+    border: 1px solid var(--line-color);
+    padding: 2px;
+    background-color: var(--button-color);
+}
+
+.link_button:hover {
+    background-color: var(--button-highlight-color);
+}
+
+/* UI form */
+
+.ui {
+    font-size: 0.875rem;
+}
+
+form.ui {
+    flex: 0; /* do not grow and steal space to the waterfall */
+    display: flex;
+    flex-flow: row wrap;
+    align-items: center;
+    justify-content: space-around;
+    column-gap: 20px;
+    row-gap: 10px;
+    padding: 10px;
+}
+
+.ui fieldset {
+    border: none;
+    padding: 0;
+    margin: 0;
+}
+
+.waterfall_levels input {
+    width: 4em;
+}

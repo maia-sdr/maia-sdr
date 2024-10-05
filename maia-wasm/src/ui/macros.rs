@@ -1,3 +1,4 @@
+#[macro_export]
 macro_rules! ui_elements {
     {$($element:ident : $base_ty:ty => $transform_ty:ty),* $(,)?} => {
         #[derive(Clone)]
@@ -25,6 +26,7 @@ macro_rules! ui_elements {
     }
 }
 
+#[macro_export]
 macro_rules! onchange_apply {
     ($($name:ident),*) => {
         paste::paste! {
@@ -59,6 +61,34 @@ macro_rules! onchange_apply {
     }
 }
 
+#[macro_export]
+macro_rules! onchange_apply_noprefs {
+    ($($name:ident),*) => {
+        paste::paste! {
+            $(
+                fn [<$name _onchange>](&self) -> Closure<dyn Fn()> {
+                    let ui = self.clone();
+                    Closure::new(move || {
+                        let element = &ui.elements.$name;
+                        if !element.report_validity() {
+                            return;
+                        }
+                        if let Some(value) = element.get() {
+                            ui.[<$name _apply>](value);
+                        } else {
+                            ui.window
+                                .alert_with_message(concat!("Invalid value for ",
+                                                            stringify!($name)))
+                                .unwrap();
+                        }
+                    })
+                }
+            )*
+        }
+    }
+}
+
+#[macro_export]
 macro_rules! set_on {
     ($event:ident, $self:expr, $($element:ident),*) => {
         paste::paste! {
@@ -73,18 +103,19 @@ macro_rules! set_on {
     }
 }
 
+#[macro_export]
 macro_rules! impl_request {
     ($name:ident, $request_json:ty, $get_json:ty, $url:expr, $method_ident:ident, $method:expr) => {
         paste::paste! {
-            async fn [<$method_ident _ $name>](&self, json: &$request_json) -> Result<$get_json, crate::ui::request::RequestError> {
+            async fn [<$method_ident _ $name>](&self, json: &$request_json) -> Result<$get_json, $crate::ui::request::RequestError> {
                 let method = $method;
-                let request = crate::ui::request::json_request($url, json, method)?;
+                let request = $crate::ui::request::json_request($url, json, method)?;
                 let response = JsFuture::from(self.window.fetch_with_request(&request))
                     .await?
                     .dyn_into::<Response>()?;
                 if !response.ok() {
                     let status = response.status();
-                    let error: maia_json::Error = crate::ui::request::response_to_json(&response).await?;
+                    let error: maia_json::Error = $crate::ui::request::response_to_json(&response).await?;
                     match error.suggested_action {
                         maia_json::ErrorAction::Ignore => {}
                         maia_json::ErrorAction::Log =>
@@ -98,26 +129,29 @@ macro_rules! impl_request {
                             self.alert(&error.error_description)?;
                         }
                     }
-                    return Err(crate::ui::request::RequestError::RequestFailed(error));
+                    return Err($crate::ui::request::RequestError::RequestFailed(error));
                 }
-                Ok(crate::ui::request::response_to_json(&response).await?)
+                Ok($crate::ui::request::response_to_json(&response).await?)
             }
         }
     };
 }
 
+#[macro_export]
 macro_rules! impl_patch {
     ($name:ident, $patch_json:ty, $get_json:ty, $url:expr) => {
         impl_request!($name, $patch_json, $get_json, $url, patch, "PATCH");
     };
 }
 
+#[macro_export]
 macro_rules! impl_put {
     ($name:ident, $put_json:ty, $get_json:ty, $url:expr) => {
         impl_request!($name, $put_json, $get_json, $url, put, "PUT");
     };
 }
 
+#[macro_export]
 macro_rules! set_values_if_inactive {
     ($self:expr, $source:expr, $section:ident, $($element:ident),*) => {
         let mut preferences = $self.preferences.borrow_mut();
@@ -129,7 +163,7 @@ macro_rules! set_values_if_inactive {
                 // whether it has focus.
                 if !$self.document.is_element_active(stringify!([<$section _ $element>]))
                     || std::any::Any::type_id(&$self.elements.[<$section _ $element>])
-                    == std::any::TypeId::of::<crate::ui::input::CheckboxInput>() {
+                    == std::any::TypeId::of::<$crate::ui::input::CheckboxInput>() {
                     $self.elements.[<$section _ $element>].set(&$source.$element);
                 }
                 if let Err(e) = preferences.[<update_ $section _ $element>](&$source.$element) {
@@ -140,6 +174,7 @@ macro_rules! set_values_if_inactive {
     }
 }
 
+#[macro_export]
 macro_rules! set_values {
     ($self:expr, $source:expr, $section:ident, $($element:ident),*) => {
         let mut preferences = $self.preferences.borrow_mut();
@@ -154,6 +189,7 @@ macro_rules! set_values {
     }
 }
 
+#[macro_export]
 macro_rules! impl_update_elements {
     ($name:ident, $json:ty, $($element:ident),*) => {
         paste::paste! {
@@ -185,6 +221,7 @@ macro_rules! impl_update_elements {
     }
 }
 
+#[macro_export]
 macro_rules! impl_post_update_noop {
     ($name:ident, $json:ty) => {
         paste::paste! {
@@ -195,6 +232,7 @@ macro_rules! impl_post_update_noop {
     };
 }
 
+#[macro_export]
 macro_rules! impl_post_patch_update_elements_noop {
     ($name:ident, $patch_json:ty) => {
         paste::paste! {
@@ -205,6 +243,7 @@ macro_rules! impl_post_patch_update_elements_noop {
     }
 }
 
+#[macro_export]
 macro_rules! impl_onchange_patch_modify_noop {
     ($name:ident, $patch_json:ty) => {
         paste::paste! {
@@ -213,6 +252,7 @@ macro_rules! impl_onchange_patch_modify_noop {
     };
 }
 
+#[macro_export]
 macro_rules! impl_section {
     ($name:ident, $json:ty, $patch_json:ty, $url:expr, $($element:ident),*) => {
         impl_post_update_noop!($name, $json);
@@ -222,6 +262,7 @@ macro_rules! impl_section {
     }
 }
 
+#[macro_export]
 macro_rules! impl_section_custom {
     ($name:ident, $json:ty, $patch_json:ty, $url:expr, $($element:ident),*) => {
         impl_patch!($name, $patch_json, $json, $url);
@@ -244,7 +285,7 @@ macro_rules! impl_section_custom {
 
         paste::paste! {
             async fn [<patch_ $name _update_elements>](&self, json: &$patch_json) -> Result<(), JsValue> {
-                if let Some(json_output) = crate::ui::request::ignore_request_failed(self.[<patch_ $name>](json).await)? {
+                if let Some(json_output) = $crate::ui::request::ignore_request_failed(self.[<patch_ $name>](json).await)? {
                     if let Some(state) = self.api_state.borrow_mut().as_mut() {
                         state.$name.clone_from(&json_output);
                     }
@@ -257,6 +298,7 @@ macro_rules! impl_section_custom {
     }
 }
 
+#[macro_export]
 macro_rules! impl_onchange {
     ($name:ident, $patch_json:ty, $($element:ident),*) => {
         paste::paste! {
@@ -290,6 +332,7 @@ macro_rules! impl_onchange {
     }
 }
 
+#[macro_export]
 macro_rules! impl_tabs {
     ($($element:ident),*) => {
         paste::paste! {

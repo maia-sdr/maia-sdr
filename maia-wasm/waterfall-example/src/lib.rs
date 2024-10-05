@@ -2,10 +2,22 @@ use maia_wasm::waterfall::Waterfall;
 use std::rc::Rc;
 use wasm_bindgen::prelude::*;
 
+mod ui;
+use ui::Ui;
+
 const NFFT: usize = 4096;
 
 #[wasm_bindgen]
 pub fn make_waterfall(canvas: &str) -> Result<(), JsValue> {
+    setup_waterfall(canvas, false)
+}
+
+#[wasm_bindgen]
+pub fn make_waterfall_with_ui(canvas: &str) -> Result<(), JsValue> {
+    setup_waterfall(canvas, true)
+}
+
+fn setup_waterfall(canvas: &str, with_ui: bool) -> Result<(), JsValue> {
     let (window, document) = maia_wasm::get_window_and_document()?;
     let canvas = Rc::new(
         document
@@ -14,6 +26,15 @@ pub fn make_waterfall(canvas: &str) -> Result<(), JsValue> {
             .dyn_into::<web_sys::HtmlCanvasElement>()?,
     );
     let (render_engine, waterfall, _) = maia_wasm::new_waterfall(&window, &document, &canvas)?;
+
+    if with_ui {
+        Ui::new(
+            Rc::clone(&window),
+            &document,
+            Rc::clone(&render_engine),
+            Rc::clone(&waterfall),
+        )?;
+    }
 
     let center_freq = 915e6;
     let samp_rate = 960e3;
@@ -24,8 +45,8 @@ pub fn make_waterfall(canvas: &str) -> Result<(), JsValue> {
     {
         let mut waterfall = waterfall.borrow_mut();
         waterfall.set_freq_samprate(center_freq, samp_rate, &mut render_engine.borrow_mut())?;
-        waterfall.set_waterfall_min(20.0);
-        waterfall.set_waterfall_max(280.0);
+        waterfall.set_waterfall_min(25.0);
+        waterfall.set_waterfall_max(95.0);
         waterfall.set_waterfall_update_rate(waterfall_rate as f32);
     }
 
@@ -62,7 +83,15 @@ impl WaterfallGenerator {
         let pixels = decoder.decode().expect("failed to decode waterfall JPEG");
         let data = pixels
             .into_iter()
-            .map(|x| 10.0_f32.powf(0.1 * f32::from(x)))
+            .map(|x| {
+                // Scale from 0-255 JPEG pixel data to dB units. The dB range in
+                // the waterfall is 67.7 dB. The range in the JPEG is the full
+                // 0-255 range. We arbitrarily set the minimum waterfall power
+                // to 20 dB.
+                let db = 67.7 * f32::from(x) / 255.0 + 20.0;
+                // convert dB to linear power units
+                10.0_f32.powf(0.1 * db)
+            })
             .collect::<Vec<_>>()
             .into_boxed_slice();
         WaterfallGenerator {
