@@ -4,13 +4,13 @@ use maia_wasm::{
     set_on,
     ui::{
         colormap::Colormap,
-        input::{CheckboxInput, EnumInput, InputElement, NumberInput},
+        input::{CheckboxInput, EnumInput, NumberInput},
     },
     ui_elements,
     waterfall::Waterfall,
 };
 use std::{cell::RefCell, rc::Rc};
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
+use wasm_bindgen::JsValue;
 use web_sys::{Document, HtmlInputElement, HtmlSelectElement, Window};
 
 #[derive(Clone)]
