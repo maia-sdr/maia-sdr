@@ -5,8 +5,7 @@
 //! other operations that are performed client-side (such as changing the
 //! waterfall levels or colormap).
 
-use std::cell::RefCell;
-use std::rc::Rc;
+use std::{cell::RefCell, rc::Rc};
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 use web_sys::{
@@ -17,14 +16,15 @@ use web_sys::{
 use crate::render::RenderEngine;
 use crate::waterfall::Waterfall;
 
-use active::IsElementActive;
 use input::{CheckboxInput, EnumInput, InputElement, NumberInput, NumberSpan, TextInput};
 
 pub mod active;
 pub mod colormap;
 pub mod input;
 #[macro_use]
-pub mod macros;
+mod macros;
+// For the time being preferences is not made public because we lack a good way
+// to allow an external crate to define preferences for a custom UI.
 mod preferences;
 pub mod request;
 

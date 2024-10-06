@@ -119,12 +119,38 @@ impl Preferences {
     }
 }
 
+/// UI preferences macro: implements dummy `update_` methods for `Preferences`.
+///
+/// This macro is used to generate dummy `update_` methods that do nothing for
+/// values that aren't stored in the preferences. This is needed because the
+/// `set_values_if_inactive` macro (which is is used by
+/// [`impl_update_elements`](crate::impl_update_elements)) always calls the
+/// `update_` method of the preferences.
+///
+/// # Example
+///
+/// ```
+/// use maia_wasm::impl_dummy_preferences;
+///
+/// struct Preferences {}
+///
+/// impl_dummy_preferences!(
+///     my_section_my_float: f64,
+///     my_section_my_string: String,
+///  );
+///
+///  // Now it is possible to call update_ methods
+///  let mut preferences = Preferences {};
+///  preferences.update_my_section_my_float(&0.5);
+///  preferences.update_my_section_my_string(&"hello".to_string());
+///  ```
+#[macro_export]
 macro_rules! impl_dummy_preferences {
     {$($name:ident : $ty:ty,)*} => {
         impl Preferences {
             $(
                 paste::paste! {
-                    pub fn [<update_ $name>](&mut self, _value: &$ty) -> Result<(), JsValue> {
+                    pub fn [<update_ $name>](&mut self, _value: &$ty) -> Result<(), wasm_bindgen::JsValue> {
                         Ok(())
                     }
                 }
@@ -133,10 +159,6 @@ macro_rules! impl_dummy_preferences {
     }
 }
 
-// This is used to generate dummy update_* methods that do nothing for values
-// that aren't stored in the preferences. This is needed because the
-// set_values_if_inactive! macro always calls the update_* method of the
-// preferences.
 impl_dummy_preferences!(
     ddc_output_sampling_frequency: f64,
     ddc_max_input_sampling_frequency: f64,
