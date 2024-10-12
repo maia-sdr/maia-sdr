@@ -17,12 +17,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0] - 2024-10-12
+
+- Bumped maia-http to v0.5.2. Move ichige to pm-remez.
+- Bumped maia-wasm to v0.6.0. Added spectrum to waterfall.
+
 ## [0.8.1] - 2024-09-07
 
 - Bumped maia-hdl to v0.6.0. Ported to Amaranth v0.5.2.
 - Bumped maia-httpd to v0.5.1. Updated dependencies.
 - Bumped maia-pac to v0.5.0. Regenerated with new svd2rust.
-- Bumped maia-was to v0.5.1. Update dependencies.
+- Bumped maia-wasm to v0.5.1. Update dependencies.
 
 ## [0.8.0] - 2024-05-05
 
@@ -103,7 +108,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   interface with real-time waterfall display and IQ recording in SigMF format to
   the Pluto RAM.
 
-[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.8.1...HEAD
+[unreleased]: https://github.com/maia-sdr/maia-sdr/compare/v0.9.0...HEAD
+[0.9.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/maia-sdr/maia-sdr/compare/v0.8.0...v0.8.1
 [0.8.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/maia-sdr/maia-sdr/compare/v0.6.1...v0.7.0
