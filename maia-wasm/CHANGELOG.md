@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.0 - 2024-10-12
+
+### Added
+
+- Added spectrum display to waterfall
+
+### Changed
+
+- Added `enabled` property to `RenderObject`
+- Exposed many private functions and macros of UI as public
+
 ## 0.5.1 - 2024-09-07
 
 ### Changed
