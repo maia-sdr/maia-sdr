@@ -5,8 +5,9 @@
 //! crate.
 
 use anyhow::Result;
-use pm_remez::{constant, linear, pm_parameters, pm_remez, BandSetting, PMDesign};
-use std::f64::consts::PI;
+use pm_remez::{
+    constant, linear, order_estimates::ichige, pm_parameters, pm_remez, BandSetting, PMDesign,
+};
 
 pub mod constants;
 
@@ -403,24 +404,6 @@ fn pm_estimate(fs: f64, fp: f64, d: usize, config: &Config) -> usize {
         config.delta_p,
         config.delta_s,
     )
-}
-
-// Estimate for Parks-McClellan FIR length from
-//
-// K. Ichige, M. Iwaki and R. Ishii, "Accurate estimation of minimum filter
-// length for optimum FIR digital filters," in IEEE Transactions on Circuits and
-// Systems II: Analog and Digital Signal Processing, vol. 47, no. 10,
-// pp. 1008-1016, Oct. 2000.
-fn ichige(fp: f64, delta_f: f64, delta_p: f64, delta_s: f64) -> usize {
-    let nc = (1.101 * (-(2.0 * delta_p).log10()).powf(1.1) / delta_f + 1.0).ceil();
-    let v = 2.325 * (-(delta_p.log10())).powf(-0.445) * delta_f.powf(-1.39);
-    let g = |x: f64| 2.0 / PI * (v * (x.recip() - (0.5 - delta_f).recip())).atan();
-    let n3 = (nc * (g(fp) + g(0.5 - delta_f - fp) + 1.0) / 3.0).ceil();
-    let nm = 0.52 * (delta_p / delta_s).log10() / delta_f * (-(delta_p.log10())).powf(0.17);
-    let h =
-        |x: f64, c: f64| 2.0 / PI * (c / delta_f * (x.recip() - (0.5 - delta_f).recip())).atan();
-    let dn = (nm * (h(fp, 1.1) - (h(0.5 - delta_f - fp, 0.29) - 1.0) / 2.0)).ceil();
-    (n3 + dn) as usize
 }
 
 fn zero_pack<T: Default + Clone>(x: &[T], n: usize) -> Vec<T> {

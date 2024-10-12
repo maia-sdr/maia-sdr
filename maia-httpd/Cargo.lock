@@ -1296,9 +1296,9 @@ checksum = "d231b230927b5e4ad203db57bbcbee2802f6bce620b1e4a9024a07d94e2907ec"
 
 [[package]]
 name = "pm-remez"
-version = "0.1.1"
+version = "0.1.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "adc596239d9d5d317fe18e43c090118663e3cf9db7a1dd34ede904df04596240"
+checksum = "2ae4ae52a3fb8daa0a459506347d16d1d16a645d2425970852620f5fa36c8253"
 dependencies = [
  "itertools",
  "ndarray",
