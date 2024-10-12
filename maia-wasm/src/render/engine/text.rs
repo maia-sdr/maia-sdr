@@ -98,7 +98,7 @@ impl TextRender {
         self.set_font(height_px);
         self.context
             .clear_rect(0.0, 0.0, total_width_px as f64, total_height_px as f64);
-        self.context.set_fill_style(&JsValue::from_str("white"));
+        self.context.set_fill_style_str("white");
 
         // Render each text and calculate its texture coordinates. Each text
         // gets 4 2D coordinates, given by the corners of its bounding
