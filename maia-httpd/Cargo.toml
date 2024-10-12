@@ -1,6 +1,6 @@
 [package]
 name = "maia-httpd"
-version = "0.5.1"
+version = "0.5.2"
 edition = "2021"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR HTTP server"
@@ -39,7 +39,7 @@ tokio = { version = "1", features = ["full"] }
 tokio-stream = { version = "0.1", features = ["sync"] }
 tokio-tar = "0.3"
 tokio-util = { version = "0.7", features = ["full"] }
-tower-http = { version = "0.5.1", features = ["fs", "trace"] }
+tower-http = { version = "0.6", features = ["fs", "trace"] }
 tracing = "0.1"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 
