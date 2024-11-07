@@ -193,18 +193,25 @@ ad_ip_parameter axi_ad9361 CONFIG.ID 0
 ad_ip_parameter axi_ad9361 CONFIG.CMOS_OR_LVDS_N 1
 ad_ip_parameter axi_ad9361 CONFIG.MODE_1R1T 1
 ad_ip_parameter axi_ad9361 CONFIG.ADC_INIT_DELAY 21
+
 # parameters to reduce size
 ad_ip_parameter axi_ad9361 CONFIG.TDD_DISABLE 1
-ad_ip_parameter axi_ad9361 CONFIG.ADC_USERPORTS_DISABLE 1
-ad_ip_parameter axi_ad9361 CONFIG.ADC_DCFILTER_DISABLE 1
-ad_ip_parameter axi_ad9361 CONFIG.ADC_IQCORRECTION_DISABLE 1
 ad_ip_parameter axi_ad9361 CONFIG.DAC_DDS_DISABLE 1
-ad_ip_parameter axi_ad9361 CONFIG.DAC_USERPORTS_DISABLE 1
-ad_ip_parameter axi_ad9361 CONFIG.DAC_IQCORRECTION_DISABLE 1
-
+	
+if {![info exists maia_iio]} {
+	ad_ip_parameter axi_ad9361 CONFIG.ADC_USERPORTS_DISABLE 1
+	ad_ip_parameter axi_ad9361 CONFIG.ADC_DCFILTER_DISABLE 1
+	ad_ip_parameter axi_ad9361 CONFIG.ADC_IQCORRECTION_DISABLE 1
+	ad_ip_parameter axi_ad9361 CONFIG.DAC_USERPORTS_DISABLE 1
+	ad_ip_parameter axi_ad9361 CONFIG.DAC_IQCORRECTION_DISABLE 1
+}
 # Maia SDR core
 
-ad_ip_instance maia_sdr_default maia_sdr
+if {[info exists maia_iio]} {
+	ad_ip_instance maia_sdr_maia_iio maia_sdr
+} else {
+	ad_ip_instance maia_sdr_default maia_sdr
+}
 
 ad_ip_instance xlslice adc_i_slice
 ad_ip_parameter adc_i_slice CONFIG.DIN_WIDTH 16
@@ -262,29 +269,354 @@ ad_connect  maia_sdr_clk/clk_out3 maia_sdr/clk3x_clk
 ad_connect  sys_cpu_clk maia_sdr_clk/clk_in1
 ad_connect  sys_cpu_reset maia_sdr_clk/reset
 
+if {[info exists maia_iio]} {
+
+	ad_ip_instance axi_dmac axi_ad9361_dac_dma
+	ad_ip_parameter axi_ad9361_dac_dma CONFIG.DMA_TYPE_SRC 0
+	ad_ip_parameter axi_ad9361_dac_dma CONFIG.DMA_TYPE_DEST 1
+	ad_ip_parameter axi_ad9361_dac_dma CONFIG.CYCLIC 1
+	ad_ip_parameter axi_ad9361_dac_dma CONFIG.AXI_SLICE_SRC 0
+	ad_ip_parameter axi_ad9361_dac_dma CONFIG.AXI_SLICE_DEST 0
+	ad_ip_parameter axi_ad9361_dac_dma CONFIG.DMA_2D_TRANSFER 0
+	ad_ip_parameter axi_ad9361_dac_dma CONFIG.DMA_DATA_WIDTH_DEST 64
+
+	ad_ip_instance util_upack2 tx_upack
+
+	ad_ip_instance axi_dmac axi_ad9361_adc_dma
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.DMA_TYPE_SRC 2
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.DMA_TYPE_DEST 0
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.CYCLIC 0
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.SYNC_TRANSFER_START 0
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.AXI_SLICE_SRC 0
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.AXI_SLICE_DEST 0
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.DMA_2D_TRANSFER 0
+	ad_ip_parameter axi_ad9361_adc_dma CONFIG.DMA_DATA_WIDTH_SRC 64
+	ad_ip_instance util_cpack2 cpack
+
+	ad_connect axi_ad9361/adc_enable_i0 cpack/enable_0
+	ad_connect axi_ad9361/adc_data_q0 cpack/fifo_wr_data_1
+
+	ad_connect axi_ad9361/l_clk cpack/clk
+	ad_connect axi_ad9361/rst cpack/reset
+	ad_connect axi_ad9361_adc_dma/fifo_wr cpack/packed_fifo_wr
+
+	ad_connect  axi_ad9361/l_clk tx_upack/clk
+	ad_connect  axi_ad9361/rst tx_upack/reset
+	ad_connect tx_upack/s_axis  axi_ad9361_dac_dma/m_axis
+
+	ad_ip_instance util_vector_logic logic_or [list \
+	  C_OPERATION {or} \
+	  C_SIZE 1]
+
+	ad_connect  logic_or/Op1  axi_ad9361/dac_valid_i0
+	ad_connect  logic_or/Op2  axi_ad9361/dac_valid_i1
+	ad_connect  logic_or/Res  tx_upack/fifo_rd_en
+	ad_connect  tx_upack/fifo_rd_underflow axi_ad9361/dac_dunf
+
+	ad_connect  axi_ad9361/l_clk axi_ad9361_adc_dma/fifo_wr_clk
+	ad_connect  axi_ad9361/l_clk axi_ad9361_dac_dma/m_axis_aclk
+	ad_connect  cpack/fifo_wr_overflow axi_ad9361/adc_dovf
+
+	ad_connect sys_cpu_resetn axi_ad9361_adc_dma/m_dest_axi_aresetn
+	ad_connect sys_cpu_resetn axi_ad9361_dac_dma/m_src_axi_aresetn
+}
 # interconnects
 
 ad_cpu_interconnect 0x79020000 axi_ad9361
-ad_cpu_interconnect 0x7C400000 maia_sdr
-
+if {[info exists maia_iio]} {
+	ad_cpu_interconnect 0x7C460000 maia_sdr
+	ad_cpu_interconnect 0x7C400000 axi_ad9361_adc_dma
+	ad_cpu_interconnect 0x7C420000 axi_ad9361_dac_dma
+} else {
+	ad_cpu_interconnect 0x7C400000 maia_sdr
+}
 ad_ip_parameter sys_ps7 CONFIG.PCW_USE_S_AXI_HP1 {1}
 ad_connect maia_sdr_clk/clk_out1 sys_ps7/S_AXI_HP1_ACLK
 ad_connect maia_sdr/m_axi_spectrometer sys_ps7/S_AXI_HP1
 
 ad_ip_parameter sys_ps7 CONFIG.PCW_USE_S_AXI_HP2 {1}
-ad_connect sys_cpu_clk sys_ps7/S_AXI_HP2_ACLK
-ad_connect maia_sdr/m_axi_recorder sys_ps7/S_AXI_HP2
+if {[info exists maia_iio]} {
+	ad_mem_hp2_interconnect sys_cpu_clk sys_ps7/S_AXI_HP2
+	ad_mem_hp2_interconnect sys_cpu_clk maia_sdr/m_axi_recorder
+	ad_mem_hp2_interconnect sys_cpu_clk axi_ad9361_adc_dma/m_dest_axi
+	ad_mem_hp2_interconnect sys_cpu_clk axi_ad9361_dac_dma/m_src_axi
+} else {
+	ad_connect sys_cpu_clk sys_ps7/S_AXI_HP2_ACLK
+	ad_connect maia_sdr/m_axi_recorder sys_ps7/S_AXI_HP2
+	create_bd_addr_seg -range 0x20000000 -offset 0x00000000 \
+		            [get_bd_addr_spaces maia_sdr/m_axi_recorder] \
+		            [get_bd_addr_segs sys_ps7/S_AXI_HP2/HP2_DDR_LOWOCM] \
+		            SEG_sys_ps7_HP2_DDR_LOWOCM
+}
 
 create_bd_addr_seg -range 0x20000000 -offset 0x00000000 \
                     [get_bd_addr_spaces maia_sdr/m_axi_spectrometer] \
                     [get_bd_addr_segs sys_ps7/S_AXI_HP1/HP1_DDR_LOWOCM] \
                     SEG_sys_ps7_HP1_DDR_LOWOCM
 
-create_bd_addr_seg -range 0x20000000 -offset 0x00000000 \
-                    [get_bd_addr_spaces maia_sdr/m_axi_recorder] \
-                    [get_bd_addr_segs sys_ps7/S_AXI_HP2/HP2_DDR_LOWOCM] \
-                    SEG_sys_ps7_HP2_DDR_LOWOCM
 
 # interrupts
+if {[info exists maia_iio]} {
+	ad_cpu_interrupt ps-13 mb-13 axi_ad9361_adc_dma/irq
+	ad_cpu_interrupt ps-12 mb-12 axi_ad9361_dac_dma/irq
+	ad_cpu_interrupt ps-11 mb-11 maia_sdr/interrupt_out
+} else {
+	ad_cpu_interrupt ps-13 mb-13 maia_sdr/interrupt_out
+}
 
-ad_cpu_interrupt ps-13 mb-13 maia_sdr/interrupt_out
+if {[info exists maia_iio]} {
+
+	# ======================= 8BITS RX OUT  ============================
+	# I PART
+	ad_ip_instance xlslice shiftslicei
+	ad_ip_parameter shiftslicei CONFIG.DIN_WIDTH 16
+	#MSB make a HIGH DC SPIKE...Try to use LSB
+	ad_ip_parameter shiftslicei CONFIG.DIN_FROM 7
+	ad_ip_parameter shiftslicei CONFIG.DIN_TO 0
+
+	ad_ip_parameter shiftslicei CONFIG.DOUT_WIDTH 8
+
+	ad_connect shiftslicei/Din axi_ad9361/adc_data_i0
+
+	# Q PART
+	ad_ip_instance xlslice shiftsliceq
+	ad_ip_parameter shiftsliceq CONFIG.DIN_WIDTH 16
+	ad_ip_parameter shiftsliceq CONFIG.DIN_FROM 7
+	ad_ip_parameter shiftsliceq CONFIG.DIN_TO 0
+	ad_ip_parameter shiftsliceq CONFIG.DOUT_WIDTH 8
+
+	ad_connect shiftsliceq/Din axi_ad9361/adc_data_q0
+
+	#IQ combine 
+	ad_ip_instance xlconcat concatslice_iq
+	ad_connect concatslice_iq/In0 shiftslicei/Dout
+	ad_connect concatslice_iq/In1 shiftsliceq/Dout
+
+	#Mux select CS8
+	#Select input depending on qo_enable
+	ad_ip_instance util_vector_logic logic_no_q0 [list \
+	  C_OPERATION {not} \
+	  C_SIZE 1]
+	ad_connect axi_ad9361/adc_enable_q0 logic_no_q0/Op1
+
+	#ad_ip_instance ad_bus_mux muxcs8 -> DOESNT WORK , USE create_bd_cell instead
+	add_files -norecurse  ../../adi-hdl/library/common/ad_bus_mux.v
+	create_bd_cell -type module -reference ad_bus_mux muxcs8
+	ad_connect muxcs8/select_path logic_no_q0/Res
+
+	#First input CS16 - > I0 -> I0
+	ad_connect axi_ad9361/adc_data_i0 muxcs8/data_in_0
+	ad_connect axi_ad9361/adc_valid_i0 muxcs8/valid_in_0
+	ad_connect axi_ad9361/adc_enable_q0 muxcs8/enable_in_0
+
+	#Second input CS8 - > I0+Q0
+	ad_connect concatslice_iq/Dout muxcs8/data_in_1
+	ad_connect axi_ad9361/adc_valid_i0 muxcs8/valid_in_1
+	ad_connect GND muxcs8/enable_in_1
+
+	#OUT
+	ad_connect muxcs8/valid_out cpack/fifo_wr_en
+	ad_connect muxcs8/data_out cpack/fifo_wr_data_0
+	ad_connect muxcs8/enable_out cpack/enable_1
+
+	# ======================= 8BITS TX OUT  ============================
+	# I PART
+	ad_ip_instance xlslice shiftsliceitx
+	ad_ip_parameter shiftsliceitx CONFIG.DIN_WIDTH 16
+	ad_ip_parameter shiftsliceitx CONFIG.DIN_FROM 15
+	ad_ip_parameter shiftsliceitx CONFIG.DIN_TO 8
+	ad_ip_parameter shiftsliceitx CONFIG.DOUT_WIDTH 8
+	ad_connect tx_upack/fifo_rd_data_0 shiftsliceitx/Din
+
+	ad_ip_instance xlconcat concatslicetx_i
+
+	ad_ip_parameter concatslicetx_i CONFIG.NUM_PORTS 3
+	ad_ip_parameter concatslicetx_i CONFIG.IN0_WIDTH 4
+	ad_ip_parameter concatslicetx_i CONFIG.IN1_WIDTH 8
+	ad_ip_parameter concatslicetx_i CONFIG.IN2_WIDTH 4
+
+	ad_connect shiftsliceitx/Dout concatslicetx_i/In1
+
+	# Q PART
+	ad_ip_instance xlslice shiftsliceqtx
+	ad_ip_parameter shiftsliceqtx CONFIG.DIN_WIDTH 16
+	ad_ip_parameter shiftsliceqtx CONFIG.DIN_FROM 7
+	ad_ip_parameter shiftsliceqtx CONFIG.DIN_TO 0
+	ad_ip_parameter shiftsliceqtx CONFIG.DOUT_WIDTH 8
+	ad_connect tx_upack/fifo_rd_data_0 shiftsliceqtx/Din
+
+	ad_ip_instance xlconcat concatslicetx_q
+	ad_ip_parameter concatslicetx_q CONFIG.NUM_PORTS 3
+	ad_ip_parameter concatslicetx_q CONFIG.IN0_WIDTH 4
+	ad_ip_parameter concatslicetx_q CONFIG.IN1_WIDTH 8
+	ad_ip_parameter concatslicetx_q CONFIG.IN2_WIDTH 4
+
+	ad_connect shiftsliceqtx/Dout concatslicetx_q/In1
+
+	ad_ip_instance util_vector_logic logic_no_q0_tx [list \
+	  C_OPERATION {not} \
+	  C_SIZE 1]
+	ad_connect axi_ad9361/dac_enable_q0 logic_no_q0_tx/Op1
+
+	#Select input depending on dac_qo_enable
+	# *****  I PART **********
+
+	create_bd_cell -type module -reference ad_bus_mux muxcs8_tx_i
+
+	ad_connect muxcs8_tx_i/select_path logic_no_q0_tx/Res
+	ad_connect muxcs8_tx_i/enable_in_0 axi_ad9361/dac_enable_i0
+	#First input CS16 - > I0 -> I0
+	ad_connect tx_upack/fifo_rd_data_0 muxcs8_tx_i/data_in_0
+	#Second input C8 - > CS16 > I0
+	ad_connect concatslicetx_i/Dout muxcs8_tx_i/data_in_1
+	ad_connect muxcs8_tx_i/enable_in_1 axi_ad9361/dac_enable_i0
+
+	#OUT
+	ad_connect muxcs8_tx_i/data_out axi_ad9361/dac_data_i0
+	ad_connect muxcs8_tx_i/enable_out tx_upack/enable_0
+
+	#Select input depending on dac_qo_enable
+	# *****  Q PART **********
+
+	create_bd_cell -type module -reference ad_bus_mux muxcs8_tx_q
+
+	ad_connect muxcs8_tx_q/select_path logic_no_q0_tx/Res
+	ad_connect muxcs8_tx_q/enable_in_0 axi_ad9361/dac_enable_q0
+	#First input CS16 - > I0 -> I0
+	ad_connect tx_upack/fifo_rd_data_1 muxcs8_tx_q/data_in_0
+	#Second input C8 - > CS16 > I0
+	ad_connect concatslicetx_q/Dout muxcs8_tx_q/data_in_1
+	ad_connect muxcs8_tx_q/enable_in_1 axi_ad9361/dac_enable_i0
+
+	#OUT
+	ad_connect muxcs8_tx_q/data_out axi_ad9361/dac_data_q0
+	ad_connect muxcs8_tx_q/enable_out tx_upack/enable_1
+
+	# ******************************************************************
+	#                       2ND CHANNEL 
+	#
+
+	# ======================= 8BITS RX2 OUT  ============================
+	# I PART
+	ad_ip_instance xlslice shiftslicei2
+	ad_ip_parameter shiftslicei2 CONFIG.DIN_WIDTH 16
+	#MSB make a HIGH DC SPIKE...Try to use LSB
+	ad_ip_parameter shiftslicei2 CONFIG.DIN_FROM 7
+	ad_ip_parameter shiftslicei2 CONFIG.DIN_TO 0
+
+	ad_ip_parameter shiftslicei2 CONFIG.DOUT_WIDTH 8
+
+	ad_connect shiftslicei2/Din axi_ad9361/adc_data_i1
+
+	# Q PART
+	ad_ip_instance xlslice shiftsliceq2
+	ad_ip_parameter shiftsliceq2 CONFIG.DIN_WIDTH 16
+	ad_ip_parameter shiftsliceq2 CONFIG.DIN_FROM 7
+	ad_ip_parameter shiftsliceq2 CONFIG.DIN_TO 0
+	ad_ip_parameter shiftsliceq2 CONFIG.DOUT_WIDTH 8
+
+	ad_connect shiftsliceq2/Din axi_ad9361/adc_data_q1
+
+	#IQ combine 
+	ad_ip_instance xlconcat concatslice_iq2
+	ad_connect concatslice_iq2/In0 shiftslicei2/Dout
+	ad_connect concatslice_iq2/In1 shiftsliceq2/Dout
+
+	#Mux select CS8
+	#Select input depending on qo_enable
+	ad_ip_instance util_vector_logic logic_no_q02 [list \
+	  C_OPERATION {not} \
+	  C_SIZE 1]
+	ad_connect axi_ad9361/adc_enable_q0 logic_no_q02/Op1
+
+	#ad_ip_instance ad_bus_mux muxcs8 -> DOESNT WORK , USE create_bd_cell instead
+	create_bd_cell -type module -reference ad_bus_mux muxcs82
+
+	ad_connect muxcs82/select_path logic_no_q02/Res
+	#First input CS16 - > I0 -> I0
+	ad_connect axi_ad9361/adc_data_i1 muxcs82/data_in_0
+	ad_connect axi_ad9361/adc_valid_i1 muxcs82/valid_in_0
+	ad_connect axi_ad9361/adc_enable_q1 muxcs82/enable_in_0
+	#Second input CS8 - > I0+Q0
+	ad_connect concatslice_iq2/Dout muxcs82/data_in_1
+	ad_connect axi_ad9361/adc_valid_i1 muxcs82/valid_in_1
+	ad_connect GND muxcs82/enable_in_1
+
+	#OUT
+	#ad_connect muxcs82/valid_out cpack/fifo_wr_en
+	ad_connect muxcs82/data_out cpack/fifo_wr_data_2
+	ad_connect muxcs82/enable_out cpack/enable_3
+
+	# ======================= 8BITS TX2 OUT  ============================
+	# I PART
+	ad_ip_instance xlslice shiftsliceitx2
+	ad_ip_parameter shiftsliceitx2 CONFIG.DIN_WIDTH 16
+	ad_ip_parameter shiftsliceitx2 CONFIG.DIN_FROM 15
+	ad_ip_parameter shiftsliceitx2 CONFIG.DIN_TO 8
+	ad_ip_parameter shiftsliceitx2 CONFIG.DOUT_WIDTH 8
+	ad_connect tx_upack/fifo_rd_data_2 shiftsliceitx2/Din
+
+	ad_ip_instance xlconcat concatslicetx_i2
+
+	ad_ip_parameter concatslicetx_i2 CONFIG.NUM_PORTS 3
+	ad_ip_parameter concatslicetx_i2 CONFIG.IN0_WIDTH 4
+	ad_ip_parameter concatslicetx_i2 CONFIG.IN1_WIDTH 8
+	ad_ip_parameter concatslicetx_i2 CONFIG.IN2_WIDTH 4
+
+	ad_connect shiftsliceitx2/Dout concatslicetx_i2/In1
+
+	# Q PART
+	ad_ip_instance xlslice shiftsliceqtx2
+	ad_ip_parameter shiftsliceqtx2 CONFIG.DIN_WIDTH 16
+	ad_ip_parameter shiftsliceqtx2 CONFIG.DIN_FROM 7
+	ad_ip_parameter shiftsliceqtx2 CONFIG.DIN_TO 0
+	ad_ip_parameter shiftsliceqtx2 CONFIG.DOUT_WIDTH 8
+	ad_connect tx_upack/fifo_rd_data_2 shiftsliceqtx2/Din
+
+	ad_ip_instance xlconcat concatslicetx_q2
+	ad_ip_parameter concatslicetx_q2 CONFIG.NUM_PORTS 3
+	ad_ip_parameter concatslicetx_q2 CONFIG.IN0_WIDTH 4
+	ad_ip_parameter concatslicetx_q2 CONFIG.IN1_WIDTH 8
+	ad_ip_parameter concatslicetx_q2 CONFIG.IN2_WIDTH 4
+
+	ad_connect shiftsliceqtx2/Dout concatslicetx_q2/In1
+
+	ad_ip_instance util_vector_logic logic_no_q0_tx2 [list \
+	  C_OPERATION {not} \
+	  C_SIZE 1]
+	ad_connect axi_ad9361/dac_enable_q1 logic_no_q0_tx2/Op1
+
+
+	#Select input depending on dac_qo_enable
+	# *****  I PART **********
+	create_bd_cell -type module -reference ad_bus_mux muxcs8_tx_i2
+
+	ad_connect muxcs8_tx_i2/select_path logic_no_q0_tx2/Res
+	ad_connect muxcs8_tx_i2/enable_in_0 axi_ad9361/dac_enable_i1
+	#First input CS16 - > I0 -> I0
+	ad_connect tx_upack/fifo_rd_data_2 muxcs8_tx_i2/data_in_0
+	#Second input C8 - > CS16 > I0
+	ad_connect concatslicetx_i2/Dout muxcs8_tx_i2/data_in_1
+	ad_connect muxcs8_tx_i2/enable_in_1 axi_ad9361/dac_enable_i1
+
+	#OUT
+	ad_connect muxcs8_tx_i2/data_out axi_ad9361/dac_data_i1
+	ad_connect muxcs8_tx_i2/enable_out tx_upack/enable_2
+
+	#Select input depending on dac_qo_enable
+	# *****  Q PART **********
+	create_bd_cell -type module -reference ad_bus_mux muxcs8_tx_q2
+
+	ad_connect muxcs8_tx_q2/select_path logic_no_q0_tx2/Res
+	ad_connect muxcs8_tx_q2/enable_in_0 axi_ad9361/dac_enable_q1
+	#First input CS16 - > I0 -> I0
+	ad_connect tx_upack/fifo_rd_data_3 muxcs8_tx_q2/data_in_0
+	#Second input C8 - > CS16 > I0
+	ad_connect concatslicetx_q2/Dout muxcs8_tx_q2/data_in_1
+	ad_connect muxcs8_tx_q2/enable_in_1 axi_ad9361/dac_enable_i1
+
+	#OUT
+	ad_connect muxcs8_tx_q2/data_out axi_ad9361/dac_data_q1
+	ad_connect muxcs8_tx_q2/enable_out tx_upack/enable_3
+}
+
