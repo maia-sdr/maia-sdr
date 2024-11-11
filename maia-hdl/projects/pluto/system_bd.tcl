@@ -204,7 +204,7 @@ ad_ip_parameter axi_ad9361 CONFIG.DAC_IQCORRECTION_DISABLE 1
 
 # Maia SDR core
 
-ad_ip_instance maia_sdr maia_sdr
+ad_ip_instance maia_sdr_default maia_sdr
 
 ad_ip_instance xlslice adc_i_slice
 ad_ip_parameter adc_i_slice CONFIG.DIN_WIDTH 16
