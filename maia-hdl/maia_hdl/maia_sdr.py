@@ -6,6 +6,8 @@
 # SPDX-License-Identifier: MIT
 #
 
+import argparse
+
 from amaranth import *
 from amaranth.lib.cdc import FFSynchronizer, PulseSynchronizer
 import amaranth.back.verilog
@@ -13,6 +15,8 @@ import amaranth.back.verilog
 from .axi4_lite import Axi4LiteRegisterBridge
 from .cdc import RegisterCDC, RxIQCDC
 from .clknx import ClkNxCommonEdge
+from .config import MaiaSDRConfig
+from . import configs
 from .ddc import DDC
 from .pulse import PulseStretcher
 from .pluto_platform import PlutoPlatform
@@ -25,11 +29,13 @@ _version = '0.6.0'
 
 
 class MaiaSDR(Elaboratable):
-    """Maia-SDR top level
+    """Maia SDR top level
 
     This elaboratable is the top-level Maia SDR IP core.
     """
-    def __init__(self):
+    def __init__(self, config=MaiaSDRConfig()):
+        config.validate()
+        self.config = config
         self.axi4_awidth = 4
         self.s_axi_lite = ClockDomain()
         self.sampling = ClockDomain()
@@ -57,7 +63,7 @@ class MaiaSDR(Elaboratable):
                           int(_version.split('.')[1])),
                     Field('major', Access.R, 8,
                           int(_version.split('.')[0])),
-                    Field('platform', Access.R, 8, 0),
+                    Field('platform', Access.R, 8, config.platform),
                 ]),
                 0b10: Register('control', [
                     Field('sdr_reset', Access.RW, 1, 1),
@@ -84,10 +90,14 @@ class MaiaSDR(Elaboratable):
             },
             1)
         self.spectrometer = Spectrometer(
-            0x1a00_0000, 3, dma_name='m_axi_spectrometer')
+            config.spectrometer_address,
+            config.spectrometer_buffers.bit_length() - 1,
+            dma_name='m_axi_spectrometer')
         self.recorder = Recorder16IQ(
-            0x0100_0000, 0x1a00_0000, dma_name='m_axi_recorder',
-            domain_in='sync', domain_dma='s_axi_lite')
+            config.recorder_address_range[0],
+            config.recorder_address_range[1],
+            dma_name='m_axi_recorder', domain_in='sync',
+            domain_dma='s_axi_lite')
         self.ddc = DDC('clk3x')
         self.sdr_registers = Registers(
             'sdr', {
@@ -199,7 +209,7 @@ class MaiaSDR(Elaboratable):
             'name': 'Maia SDR',
             'series': 'Maia SDR',
             'version': _version,
-            'description': 'Maia SDR IP core',
+            'description': f'Maia SDR IP core (platform {config.platform})',
             'licenseText': ('SPDX-License-Identifier: MIT '
                             'Copyright (C) Daniel Estevez 2022-2024'),
         }
@@ -450,8 +460,25 @@ def write_svd(path):
         f.write(top.svd())
 
 
-if __name__ == '__main__':
-    top = MaiaSDR()
+def parse_args():
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--config', default='default',
+        help='Maia SDR configuration name [default=%(default)r]')
+    parser.add_argument(
+        'output_file', help='Output verilog file')
+    return parser.parse_args()
+
+
+def main():
+    args = parse_args()
+    config = getattr(configs, args.config)()
+    top = MaiaSDR(config)
     platform = PlutoPlatform()
-    amaranth.cli.main(
-        top, platform=platform, ports=top.ports())
+    with open(args.output_file, 'w') as f:
+        f.write(amaranth.back.verilog.convert(
+            top, platform=platform, ports=top.ports()))
+
+
+if __name__ == '__main__':
+    main()

@@ -1,17 +1,17 @@
 # Package Maia SDR IP core
 
-create_project maia_sdr . -force
+create_project maia_sdr_$::env(MAIA_SDR_CONFIG) . -force
 add_files maia_sdr.v
-add_files -fileset constrs_1 -norecurse maia_sdr.xdc
+add_files -fileset constrs_1 -norecurse ../maia_sdr.xdc
 set_property top top [current_fileset]
 load_features ipservices
-ipx::package_project -import_files -root_dir . -vendor destevez.net -library user -taxonomy /Maia-SDR -force
+ipx::package_project -import_files -root_dir . -vendor maia-sdr.org -library user -taxonomy /Maia-SDR -force
 set_property name maia_sdr [ipx::current_core]
-set_property library maia_sdr [ipx::current_core]
+set_property library maia_sdr_$::env(MAIA_SDR_CONFIG) [ipx::current_core]
 set_property display_name {Maia SDR} [ipx::current_core]
-set_property description {Maia SDR} [ipx::current_core]
-set_property vendor_display_name {Daniel Estevez} [ipx::current_core]
-set_property company_url {https://destevez.net} [ipx::current_core]
+set_property description "Maia SDR (config: $::env(MAIA_SDR_CONFIG))" [ipx::current_core]
+set_property vendor_display_name {Maia SDR} [ipx::current_core]
+set_property company_url {https://maia-sdr.org} [ipx::current_core]
 set_property version $::env(IP_CORE_VERSION) [ipx::current_core]
 
 # sampling_clk interface
