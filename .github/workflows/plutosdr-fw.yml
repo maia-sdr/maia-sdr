@@ -57,7 +57,7 @@ jobs:
         export ADI_IGNORE_VERSION_CHECK=1
         make
     - name: Upload artifacts
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: pluto-firmware
         path: |
