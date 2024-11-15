@@ -1,6 +1,7 @@
 use super::{
     ad9361::ad9361_json,
     ddc::ddc_json,
+    geolocation::device_geolocation,
     json_error::JsonError,
     recording::{recorder_json, recording_metadata_json},
     spectrometer::spectrometer_json,
@@ -19,10 +20,12 @@ async fn api_json(state: &AppState) -> Result<maia_json::Api> {
     let spectrometer = spectrometer_json(state).await?;
     let recorder = recorder_json(state).await?;
     let recording_metadata = recording_metadata_json(state).await;
+    let geolocation = device_geolocation(state);
     let time = time_json()?;
     Ok(maia_json::Api {
         ad9361,
         ddc,
+        geolocation,
         spectrometer,
         recorder,
         recording_metadata,

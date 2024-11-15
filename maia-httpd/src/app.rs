@@ -39,6 +39,7 @@ impl App {
         let state = AppState(Arc::new(State {
             ad9361,
             ip_core,
+            geolocation: std::sync::Mutex::new(None),
             recorder,
             spectrometer_config: Default::default(),
         }));
@@ -97,6 +98,7 @@ pub struct AppState(Arc<State>);
 struct State {
     ad9361: tokio::sync::Mutex<Ad9361>,
     ip_core: Mutex<IpCore>,
+    geolocation: Mutex<Option<maia_json::Geolocation>>,
     recorder: RecorderState,
     spectrometer_config: SpectrometerConfig,
 }
@@ -110,6 +112,14 @@ impl AppState {
     /// Gives access to the [`IpCore`] object of the application.
     pub fn ip_core(&self) -> &Mutex<IpCore> {
         &self.0.ip_core
+    }
+
+    /// Gives access to the current geolocation of the device.
+    ///
+    /// The geolocation is `None` if it has never been set or if it has been
+    /// cleared, or a valid [`Geolocation`](maia_json::Geolocation) otherwise.
+    pub fn geolocation(&self) -> &Mutex<Option<maia_json::Geolocation>> {
+        &self.0.geolocation
     }
 
     /// Gives access to the [`RecorderState`] object of the application.

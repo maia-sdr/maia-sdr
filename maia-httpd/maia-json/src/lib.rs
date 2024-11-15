@@ -14,12 +14,14 @@ pub struct Api {
     pub ad9361: Ad9361,
     /// DDC settings.
     pub ddc: DDCConfigSummary,
-    /// Spectrometer settings.
-    pub spectrometer: Spectrometer,
+    /// Device geolocation.
+    pub geolocation: DeviceGeolocation,
     /// IQ recorder settings.
     pub recorder: Recorder,
     /// Metadata for the current recording.
     pub recording_metadata: RecordingMetadata,
+    /// Spectrometer settings.
+    pub spectrometer: Spectrometer,
     /// System time.
     pub time: Time,
 }
@@ -453,12 +455,28 @@ pub enum RecorderState {
     Stopping,
 }
 
+/// Geolocation.
+///
+/// This is based on a GeoJSON point, but it is encoded differently in JSON.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct Geolocation {
+    /// Latitude in degrees.
+    pub latitude: f64,
+    /// Longitude in degrees.
+    pub longitude: f64,
+    /// Altitude in meters.
+    ///
+    /// The altitude is optional.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub altitude: Option<f64>,
+}
+
 /// Recording metadata JSON schema.
 ///
 /// This JSON schema corresponds to GET and PUT requests on
 /// `/api/recording/metadata`. It contains the metadata for the current
 /// recording.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
 pub struct RecordingMetadata {
     /// Recording file name.
     pub filename: String,
@@ -466,14 +484,19 @@ pub struct RecordingMetadata {
     pub description: String,
     /// Recording author.
     pub author: String,
+    /// Recording geolocation.
+    ///
+    /// This corresponds to the SigMF "core:geolocation" key. It contains `None`
+    /// if the geolocation is unknown.
+    pub geolocation: DeviceGeolocation,
 }
 
 /// Recording metadata PATCH JSON schema.
 ///
-/// This JSON schema corresponds to PATCH requests on
+/// This JSON schema corresponds to PATCH and PUT requests on
 /// `/api/recording/metadata`. It is used to modify the metadata for the current
 /// recording.
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default, Hash)]
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
 pub struct PatchRecordingMetadata {
     /// Recording file name.
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -484,11 +507,25 @@ pub struct PatchRecordingMetadata {
     /// Recording author.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub author: Option<String>,
+    /// Recording geolocation.
+    ///
+    /// This corresponds to the SigMF "core:geolocation" key. It contains `None`
+    /// inside the `DeviceGeolocation` to remove the geolocation from the
+    /// metadata.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub geolocation: Option<DeviceGeolocation>,
 }
 
 impl From<RecordingMetadata> for PatchRecordingMetadata {
     fn from(val: RecordingMetadata) -> PatchRecordingMetadata {
-        get_fields!(PatchRecordingMetadata, val, filename, description, author)
+        get_fields!(
+            PatchRecordingMetadata,
+            val,
+            filename,
+            description,
+            author,
+            geolocation
+        )
     }
 }
 
@@ -521,6 +558,19 @@ impl From<Time> for PatchTime {
     fn from(val: Time) -> PatchTime {
         get_fields!(PatchTime, val, time)
     }
+}
+
+/// Device geolocation JSON schema.
+///
+/// This JSON schema corresponds to GET and PUT requests on
+/// `/api/geolocation`. The GET request contains the current device geolocation,
+/// or `None` if it has never been set or if it has been cleared. The PUT
+/// request sets the current device geolocation, or clears it the request
+/// contains `None`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Default)]
+pub struct DeviceGeolocation {
+    /// Current device geolocation.
+    pub point: Option<Geolocation>,
 }
 
 /// Error.

@@ -2,6 +2,7 @@
 //!
 //! This module contains a minimal implementation of [SigMF](https://github.com/gnuradio/SigMF/).
 
+use anyhow::Result;
 use chrono::prelude::*;
 use serde_json::json;
 
@@ -30,6 +31,7 @@ pub struct Metadata {
     author: String,
     frequency: f64,
     datetime: DateTime<Utc>,
+    geolocation: Option<GeoJsonPoint>,
 }
 
 /// SigMF datatype.
@@ -139,6 +141,116 @@ impl From<maia_json::RecorderMode> for Datatype {
     }
 }
 
+/// GeoJSON point.
+///
+/// This struct represents a GeoJSON point, which contains a latitude and
+/// longitude with respect to the WGS84 ellipsoid, and an optional altitude.
+#[derive(Debug, Copy, Clone, PartialEq)]
+pub struct GeoJsonPoint {
+    latitude: f64,
+    longitude: f64,
+    altitude: Option<f64>,
+}
+
+impl TryFrom<maia_json::Geolocation> for GeoJsonPoint {
+    type Error = anyhow::Error;
+
+    fn try_from(value: maia_json::Geolocation) -> Result<GeoJsonPoint> {
+        GeoJsonPoint::from_lat_lon_alt_option(value.latitude, value.longitude, value.altitude)
+    }
+}
+
+impl From<GeoJsonPoint> for maia_json::Geolocation {
+    fn from(value: GeoJsonPoint) -> maia_json::Geolocation {
+        maia_json::Geolocation {
+            altitude: value.altitude,
+            latitude: value.latitude,
+            longitude: value.longitude,
+        }
+    }
+}
+
+impl GeoJsonPoint {
+    /// Creates a GeoJSON point from a latitude and longitude.
+    ///
+    /// The latitude is given in degrees, between -90 and 90. The longitude is
+    /// given in degrees, between -180 and 180. An error is returned if the
+    /// values are out of range.
+    pub fn from_lat_lon(latitude: f64, longitude: f64) -> Result<GeoJsonPoint> {
+        GeoJsonPoint::from_lat_lon_alt_option(latitude, longitude, None)
+    }
+
+    /// Creates a GeoJSON point from a latitude, longitude and altitude.
+    ///
+    /// The latitude is given in degrees, between -90 and 90. The longitude is
+    /// given in degrees, between -180 and 180. The altitude is given in
+    /// meters. An error is returned if the values are out of range.
+    pub fn from_lat_lon_alt(latitude: f64, longitude: f64, altitude: f64) -> Result<GeoJsonPoint> {
+        GeoJsonPoint::from_lat_lon_alt_option(latitude, longitude, Some(altitude))
+    }
+
+    /// Creates a GeoJSON point from a latitude, longitude and an optional
+    /// altitude.
+    ///
+    /// The latitude is given in degrees, between -90 and 90. The longitude is
+    /// given in degrees, between -180 and 180. The altitude is given in
+    /// meters. An error is returned if the values are out of range.
+    pub fn from_lat_lon_alt_option(
+        latitude: f64,
+        longitude: f64,
+        altitude: Option<f64>,
+    ) -> Result<GeoJsonPoint> {
+        anyhow::ensure!(
+            (-90.0..=90.0).contains(&latitude),
+            "latitude is not between -90 and +90 degrees"
+        );
+        anyhow::ensure!(
+            (-180.0..=180.0).contains(&longitude),
+            "longitude is not between -180 and +180 degrees"
+        );
+        Ok(GeoJsonPoint {
+            latitude,
+            longitude,
+            altitude,
+        })
+    }
+
+    /// Gives the latitude of the GeoJSON point in degrees.
+    pub fn latitude(&self) -> f64 {
+        self.latitude
+    }
+
+    /// Gives the longitude of the GeoJSON point in degrees.
+    pub fn longitude(&self) -> f64 {
+        self.longitude
+    }
+
+    /// Gives the altitude of the GeoJSON point.
+    ///
+    /// The altitude is returned in meters, or `None` if the point does not
+    /// contain an altitude.
+    pub fn altitude(&self) -> Option<f64> {
+        self.altitude
+    }
+
+    /// Returns a JSON [`serde_json::Value`] that represents the GeoJSON point in JSON.
+    ///
+    /// The formatting of the JSON is compliant with the SigMF standard.
+    pub fn to_json_value(&self) -> serde_json::Value {
+        if let Some(altitude) = self.altitude {
+            json!({
+                "type": "Point",
+                "coordinates": [self.longitude, self.latitude, altitude]
+            })
+        } else {
+            json!({
+                "type": "Point",
+                "coordinates": [self.longitude, self.latitude]
+            })
+        }
+    }
+}
+
 impl Metadata {
     /// Creates a new SigMF metadata object.
     ///
@@ -153,6 +265,7 @@ impl Metadata {
             author: String::new(),
             frequency,
             datetime: Utc::now(),
+            geolocation: None,
         }
     }
 
@@ -201,6 +314,11 @@ impl Metadata {
         self.frequency
     }
 
+    /// Gives the value of the geolocation field.
+    pub fn geolocation(&self) -> Option<GeoJsonPoint> {
+        self.geolocation
+    }
+
     /// Sets the value of the frequency field.
     pub fn set_frequency(&mut self, frequency: f64) {
         self.frequency = frequency;
@@ -221,6 +339,24 @@ impl Metadata {
         self.set_datetime(Utc::now());
     }
 
+    /// Sets the value of the geolocation field.
+    pub fn set_geolocation(&mut self, geolocation: GeoJsonPoint) {
+        self.geolocation = Some(geolocation);
+    }
+
+    /// Removes the geolocation field.
+    pub fn remove_geolocation(&mut self) {
+        self.geolocation = None;
+    }
+
+    /// Sets or removes the value of the geolocation field.
+    ///
+    /// If `geolocation` is `Some`, then the value of the geolocation field is
+    /// set. Otherwise, the value is cleared.
+    pub fn set_geolocation_optional(&mut self, geolocation: Option<GeoJsonPoint>) {
+        self.geolocation = geolocation;
+    }
+
     /// Returns a string that represents the metadata in JSON.
     ///
     /// The formatting of the JSON is compliant with the SigMF standard.
@@ -235,15 +371,22 @@ impl Metadata {
     ///
     /// The formatting of the JSON is compliant with the SigMF standard.
     pub fn to_json_value(&self) -> serde_json::Value {
+        let mut global = json!({
+            "core:datatype": self.datatype.to_string(),
+            "core:version": SIGMF_VERSION,
+            "core:sample_rate": self.sample_rate,
+            "core:description": self.description,
+            "core:author": self.author,
+            "core:recorder": SIGMF_RECORDER
+        });
+        if let Some(geolocation) = self.geolocation() {
+            global
+                .as_object_mut()
+                .unwrap()
+                .insert("core:geolocation".to_string(), geolocation.to_json_value());
+        }
         json!({
-            "global": {
-                "core:datatype": self.datatype.to_string(),
-                "core:version": SIGMF_VERSION,
-                "core:sample_rate": self.sample_rate,
-                "core:description": self.description,
-                "core:author": self.author,
-                "core:recorder": SIGMF_RECORDER
-            },
+            "global": global,
             "captures": [
                 {
                     "core:sample_start": 0,
@@ -272,6 +415,7 @@ mod test {
             author: "Tester".to_string(),
             frequency: 2400e6,
             datetime: Utc.with_ymd_and_hms(2022, 11, 1, 0, 0, 0).unwrap(),
+            geolocation: None,
         };
         let json = meta.to_json();
         let expected = [
@@ -288,6 +432,60 @@ mod test {
     "core:author": "Tester",
     "core:datatype": "ci16_le",
     "core:description": "Test SigMF dataset",
+    "core:recorder": ""#,
+            SIGMF_RECORDER,
+            r#"",
+    "core:sample_rate": 30720000.0,
+    "core:version": ""#,
+            SIGMF_VERSION,
+            r#""
+  }
+}
+"#,
+        ]
+        .join("");
+        assert_eq!(json, expected);
+    }
+
+    #[test]
+    fn to_json_with_geolocation() {
+        let meta = Metadata {
+            datatype: Datatype {
+                field: Field::Complex,
+                format: SampleFormat::I16(Endianness::Le),
+            },
+            sample_rate: 30.72e6,
+            description: "Test SigMF dataset with geolocation".to_string(),
+            author: "Tester".to_string(),
+            frequency: 2400e6,
+            datetime: Utc.with_ymd_and_hms(2022, 11, 1, 0, 0, 0).unwrap(),
+            geolocation: Some(
+                GeoJsonPoint::from_lat_lon_alt(34.0787916, -107.6183682, 2120.0).unwrap(),
+            ),
+        };
+        let json = meta.to_json();
+        let expected = [
+            r#"{
+  "annotations": [],
+  "captures": [
+    {
+      "core:datetime": "2022-11-01T00:00:00.000Z",
+      "core:frequency": 2400000000.0,
+      "core:sample_start": 0
+    }
+  ],
+  "global": {
+    "core:author": "Tester",
+    "core:datatype": "ci16_le",
+    "core:description": "Test SigMF dataset with geolocation",
+    "core:geolocation": {
+      "coordinates": [
+        -107.6183682,
+        34.0787916,
+        2120.0
+      ],
+      "type": "Point"
+    },
     "core:recorder": ""#,
             SIGMF_RECORDER,
             r#"",

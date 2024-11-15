@@ -19,6 +19,7 @@ use tower_http::{
 mod ad9361;
 mod api;
 mod ddc;
+mod geolocation;
 mod iqengine;
 mod recording;
 mod spectrometer;
@@ -78,6 +79,10 @@ impl Server {
                     .patch(ddc::patch_ddc_config),
             )
             .route("/api/ddc/design", put(ddc::put_ddc_design))
+            .route(
+                "/api/geolocation",
+                get(geolocation::get_geolocation).put(geolocation::put_geolocation),
+            )
             .route(
                 "/api/recorder",
                 get(recording::get_recorder).patch(recording::patch_recorder),
