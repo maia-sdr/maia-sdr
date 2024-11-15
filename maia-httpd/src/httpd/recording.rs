@@ -145,6 +145,14 @@ impl RecordingMeta {
     }
 
     async fn update_for_new_recording(&mut self, state: &AppState) -> Result<()> {
+        if let Some(geolocation) = state.geolocation().lock().unwrap().as_ref() {
+            // It is assumed that the geolocation has been validated, so it
+            // should not error when converting to a GeoJSON point.
+            self.sigmf_meta
+                .set_geolocation(geolocation.clone().try_into().unwrap())
+        } else {
+            self.sigmf_meta.remove_geolocation();
+        }
         self.sigmf_meta.set_datetime_now();
 
         if let Some(duration) = self.maximum_duration {
@@ -195,6 +203,9 @@ impl RecordingMeta {
             filename: self.filename.clone(),
             description: self.sigmf_meta.description().to_string(),
             author: self.sigmf_meta.author().to_string(),
+            geolocation: maia_json::DeviceGeolocation {
+                point: self.sigmf_meta.geolocation().map(|g| g.into()),
+            },
         }
     }
 
@@ -210,7 +221,7 @@ impl RecordingMeta {
         })
     }
 
-    fn patch_json(&mut self, patch: maia_json::PatchRecordingMetadata) {
+    fn patch_json(&mut self, patch: maia_json::PatchRecordingMetadata) -> Result<()> {
         if let Some(filename) = patch.filename {
             self.filename = filename;
         }
@@ -220,6 +231,11 @@ impl RecordingMeta {
         if let Some(author) = patch.author {
             self.sigmf_meta.set_author(&author);
         }
+        if let Some(geolocation) = patch.geolocation {
+            self.sigmf_meta
+                .set_geolocation_optional(geolocation.point.map(|g| g.try_into()).transpose()?);
+        }
+        Ok(())
     }
 
     fn prepend_timestamp_to_filename(&mut self) {
@@ -352,22 +368,29 @@ pub async fn get_recording_metadata(
     Json(recording_metadata_json(&state).await)
 }
 
+async fn set_recording_metadata(
+    state: &AppState,
+    patch: maia_json::PatchRecordingMetadata,
+) -> Result<Json<maia_json::RecordingMetadata>, JsonError> {
+    let mut metadata = state.recorder().metadata.lock().await;
+    metadata
+        .patch_json(patch)
+        .map_err(JsonError::client_error_alert)?;
+    Ok(Json(metadata.json()))
+}
+
 pub async fn put_recording_metadata(
     State(state): State<AppState>,
     Json(put): Json<maia_json::RecordingMetadata>,
-) -> Json<maia_json::RecordingMetadata> {
-    let mut metadata = state.recorder().metadata.lock().await;
-    metadata.patch_json(put.into());
-    Json(metadata.json())
+) -> Result<Json<maia_json::RecordingMetadata>, JsonError> {
+    set_recording_metadata(&state, put.into()).await
 }
 
 pub async fn patch_recording_metadata(
     State(state): State<AppState>,
     Json(patch): Json<maia_json::PatchRecordingMetadata>,
-) -> Json<maia_json::RecordingMetadata> {
-    let mut metadata = state.recorder().metadata.lock().await;
-    metadata.patch_json(patch);
-    Json(metadata.json())
+) -> Result<Json<maia_json::RecordingMetadata>, JsonError> {
+    set_recording_metadata(&state, patch).await
 }
 
 pub type SigmfStream = ReaderStream<DuplexStream>;
