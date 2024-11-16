@@ -61,7 +61,8 @@ impl App {
         let recorder_finish =
             RecorderFinishWaiter::new(state.clone(), interrupt_handler.waiter_recorder());
 
-        let httpd = httpd::Server::new(&args.listen, state, waterfall_sender).await?;
+        let httpd =
+            httpd::Server::new(args.listen, args.listen_https, state, waterfall_sender).await?;
 
         Ok(App {
             httpd,

@@ -9,6 +9,7 @@ use axum::{
     routing::{get, put},
     Router,
 };
+use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
 use tokio::sync::broadcast;
 use tower_http::{
@@ -37,25 +38,29 @@ pub use recording::{RecorderFinishWaiter, RecorderState};
 /// server.
 #[derive(Debug)]
 pub struct Server {
-    server: axum::serve::Serve<Router, Router>,
+    http_server: axum_server::Server,
+    https_server: axum_server::Server<axum_server::tls_rustls::RustlsAcceptor>,
+    app: Router,
 }
 
 impl Server {
     /// Creates a new HTTP server.
     ///
-    /// The `address` parameter gives the address in which the server will
-    /// listen. The `ad9361` and `ip_core` parameters give the server shared
-    /// access to the AD9361 device and the Maia SDR FPGA IP core. The
-    /// `spectrometer_samp_rate` parameter gives shared access to update the
-    /// sample rate of the spectrometer. The `waiter_recorder` is the interrupt
-    /// waiter for the IQ recorder, which is contolled by the HTTP server. The
-    /// `waterfall_sender` is used to obtain waterfall channel receivers for the
-    /// websocket server.
+    /// The `http_address` parameter gives the address in which the server will
+    /// listen using HTTP. The `https_address` parameter gives the address in
+    /// which the server will listen using HTTPS. The `ad9361` and `ip_core`
+    /// parameters give the server shared access to the AD9361 device and the
+    /// Maia SDR FPGA IP core. The `spectrometer_samp_rate` parameter gives
+    /// shared access to update the sample rate of the spectrometer. The
+    /// `waiter_recorder` is the interrupt waiter for the IQ recorder, which is
+    /// contolled by the HTTP server. The `waterfall_sender` is used to obtain
+    /// waterfall channel receivers for the websocket server.
     ///
     /// After calling this function, the server needs to be run by calling
     /// [`Server::run`].
     pub async fn new(
-        address: &std::net::SocketAddr,
+        http_address: std::net::SocketAddr,
+        https_address: std::net::SocketAddr,
         state: AppState,
         waterfall_sender: broadcast::Sender<Bytes>,
     ) -> Result<Server> {
@@ -127,18 +132,36 @@ impl Server {
                 ServeFile::new("iqengine/index.html"),
             )
             .route("/assets/:filename", get(iqengine::serve_assets))
-            .fallback_service(ServeDir::new("."));
-        tracing::info!(%address, "starting HTTP server");
-        let listener = tokio::net::TcpListener::bind(address).await?;
-        let server = axum::serve(listener, app.layer(TraceLayer::new_for_http()));
-        Ok(Server { server })
+            .fallback_service(ServeDir::new("."))
+            .layer(TraceLayer::new_for_http());
+        tracing::info!(%http_address, "starting HTTP server");
+        let http_server = axum_server::bind(http_address);
+        tracing::info!(%https_address, "starting HTTPS server");
+        let https_server = axum_server::bind_rustls(
+            https_address,
+            RustlsConfig::from_pem(
+                include_bytes!("httpd/self_signed_cert/cert.pem").to_vec(),
+                include_bytes!("httpd/self_signed_cert/key.pem").to_vec(),
+            )
+            .await?,
+        );
+        Ok(Server {
+            http_server,
+            https_server,
+            app,
+        })
     }
 
     /// Runs the HTTP server.
     ///
     /// This only returns if there is a fatal error.
     pub async fn run(self) -> Result<()> {
-        Ok(self.server.await?)
+        let http_server = self.http_server.serve(self.app.clone().into_make_service());
+        let https_server = self.https_server.serve(self.app.into_make_service());
+        Ok(tokio::select! {
+            ret = http_server => ret,
+            ret = https_server => ret,
+        }?)
     }
 }
 
