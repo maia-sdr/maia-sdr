@@ -37,10 +37,15 @@ impl WebSocketClient {
     /// dropped immediately.
     pub fn start(window: &Window, waterfall: Rc<RefCell<Waterfall>>) -> Result<(), JsValue> {
         let location = window.location();
+        let protocol = if location.protocol()? == "https:" {
+            "wss"
+        } else {
+            "ws"
+        };
         let hostname = location.hostname()?;
         let port = location.port()?;
         let data = Rc::new(WebSocketData {
-            url: format!("ws://{hostname}:{port}/waterfall"),
+            url: format!("{protocol}://{hostname}:{port}/waterfall"),
             onmessage: onmessage(waterfall).into_js_value(),
             onclose: RefCell::new(None),
         });
