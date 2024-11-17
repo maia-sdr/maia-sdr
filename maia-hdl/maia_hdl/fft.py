@@ -1443,6 +1443,18 @@ class FFTControl(Elaboratable):
 class FFT(Elaboratable):
     """FFT
 
+    Allowed input values:
+
+    In order to prevent internal overflows after the twiddle factor
+    multiplications, the input must have complex amplitude smaller or equal
+    than 2**(width_in-1)-1 (the complex amplitude is defined as
+    sqrt(re**2 + im**2)).
+
+    To allow the full set of possible signed width_in bit complex values,
+    the first twiddle factor multiplication should include an additional
+    bit growth of one bit, but a mode to enable this behaviour is not
+    implemented currently.
+
     Parameters
     ----------
     width_in : int

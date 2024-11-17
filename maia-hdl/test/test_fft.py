@@ -303,34 +303,60 @@ class TestFFT(AmaranthSim):
     def test_model_vs_numpy(self):
         for radix, radix_log2 in zip([2, 4, 'R22'], [1, 2, 2]):
             with self.subTest(radix=radix):
-                self.dut = FFT(self.width, self.order_log2, radix)
-                self.dummy_simulation()  # keep amaranth happy
-                n_vec = 256
-                fft_size = self.fft_size
-                re_in, im_in = (
+                for no_truncate in [False, True]:
+                    with self.subTest(no_truncate=no_truncate):
+                        self.model_vs_numpy(radix, radix_log2, no_truncate)
+
+    def model_vs_numpy(self, radix, radix_log2, no_truncate):
+        truncates = None
+        if no_truncate:
+            nstages = self.order_log2 // radix_log2
+            if radix == 'R22':
+                truncates = [[0, 0]] * nstages
+            else:
+                truncates = [0] * nstages
+        self.dut = FFT(self.width, self.order_log2, radix,
+                       truncates=truncates)
+        self.dummy_simulation()  # keep amaranth happy
+        n_vec = 2048
+        fft_size = self.fft_size
+
+        def gen_input():
+            # generate a signed self.width bit complex number
+            # with amplitude <= 2**(self.width-1) - 1
+            while True:
+                re, im = [
                     np.random.randint(
-                        -2**(self.width-3), 2**(self.width-3),
-                        n_vec * fft_size)
-                    for _ in range(2))
-                re_out, im_out = self.dut.model(re_in, im_in)
-                out_complex = re_out + 1j * im_out
-                in_complex = (re_in + 1j * im_in).reshape(
-                    n_vec, fft_size)
-                out_npy = np.fft.fft(in_complex) / fft_size
-                # Perform bit-order inversion at the output of the numpy FFT.
-                bitinvert_radix = radix_log2 if radix != 'R22' else 1
-                invert = np.array([
-                    bit_invert(n, self.order_log2, bitinvert_radix)
-                    for n in range(fft_size)])
-                out_npy = out_npy[:, invert].ravel()
-                relative_error = np.sqrt(
-                    np.sum(np.abs(out_complex - out_npy)**2)
-                    / np.sum(np.abs(out_npy)**2)
-                )
-                assert relative_error < 3e-3, \
-                    (f'FFT relative error {relative_error} too large\n'
-                     f'model: {out_complex}\n'
-                     f'numpy: {out_npy}')
+                        -2**(self.width-1), 2**(self.width-1))
+                    for j in range(2)
+                ]
+                if re**2 + im**2 <= (2**(self.width-1) - 1)**2:
+                    return re, im
+
+        z_in = [gen_input() for _ in range(n_vec * fft_size)]
+        re_in = np.array([z[0] for z in z_in], 'int')
+        im_in = np.array([z[1] for z in z_in], 'int')
+        re_out, im_out = self.dut.model(re_in, im_in)
+        out_complex = re_out + 1j * im_out
+        in_complex = (re_in + 1j * im_in).reshape(
+            n_vec, fft_size)
+        out_npy = np.fft.fft(in_complex) / fft_size
+        if no_truncate:
+            out_npy *= fft_size
+        # Perform bit-order inversion at the output of the numpy FFT.
+        bitinvert_radix = radix_log2 if radix != 'R22' else 1
+        invert = np.array([
+            bit_invert(n, self.order_log2, bitinvert_radix)
+            for n in range(fft_size)])
+        out_npy = out_npy[:, invert].ravel()
+        relative_error = np.sqrt(
+            np.sum(np.abs(out_complex - out_npy)**2)
+            / np.sum(np.abs(out_npy)**2)
+        )
+        assert relative_error < 4e-4, \
+            (f'FFT relative error {relative_error} too large\n'
+             f'model: {out_complex}\n'
+             f'numpy: {out_npy}')
 
     def dummy_simulation(self):
         # Dummy simulation, to keep amaranth happy (otherwise amaranth
