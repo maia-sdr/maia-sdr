@@ -335,7 +335,8 @@ input.decimation {
     column-gap: 10px;
 }
 
-#settings form div input:first-child {
+#settings form div input:first-child,
+#settings form div span:first-child {
     flex: 1;
 }
 
@@ -357,4 +358,10 @@ input.decimation {
 
 #download_recording {
     grid-column: 4/5;
+}
+
+/* Geolocation panel */
+
+#geolocation_panel div {
+    grid-column: 1/3;
 }
