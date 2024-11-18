@@ -34,6 +34,9 @@
           <button id="waterfall_tab" role="tab" aria-selected="false" aria-controls="waterfall_panel">
             Waterfall
           </button>
+          <button id="geolocation_tab" role="tab" aria-selected="false" aria-controls="geolocation_panel">
+            Geolocation
+          </button>
           <button id="close_settings" value="close" autofocus>Close</button>
         </div>
         <div id="recording_panel" class="" role="tabpanel" aria-labelledby="recording_tab">
@@ -56,6 +59,12 @@
             </select>
             <label for="recorder_maximum_duration">Max duration (s)</label>
             <input type="number" min="0" step="any" id="recorder_maximum_duration">
+            <label for="recording_metadata_geolocation">Geolocation</label>
+            <div class="div_value">
+              <span id="recording_metadata_geolocation"></span>
+              <button type="button" id="recording_metadata_geolocation_update">Update</button>
+              <button type="button" id="recording_metadata_geolocation_clear">Clear</button>
+            </div>
             <button type="button" id="recorder_button_replica" class="record_button"></button>
             <a id="iqengine_recording" class="link_button" href="/view/api/maiasdr/maiasdr/recording">View in IQEngine</a>
             <a id="download_recording" class="link_button" href="/recording" download>Download recording</a>
@@ -92,6 +101,17 @@
             <input type="checkbox" id="waterfall_show_spectrum">
             <label for="waterfall_show_ddc">Show DDC passband</label>
             <input type="checkbox" id="waterfall_show_ddc" checked>
+          </form>
+        </div>
+        <div id="geolocation_panel" class="hidden" role="tabpanel" aria-labelledby="geolocation_tab">
+          <form>
+            <div>
+              <span id="geolocation_point"></span>
+              <button type="button" id="geolocation_update">Update</button>            
+              <button type="button" id="geolocation_clear">Clear</button>
+              <label for="geolocation_watch">Update continuously</label>
+              <input type="checkbox" id="geolocation_watch">
+            </div>
           </form>
         </div>
     </dialog>

@@ -5,12 +5,16 @@
 //! other operations that are performed client-side (such as changing the
 //! waterfall levels or colormap).
 
-use std::{cell::RefCell, rc::Rc};
+use serde::Deserialize;
+use std::{
+    cell::{Cell, Ref, RefCell},
+    rc::Rc,
+};
 use wasm_bindgen::{closure::Closure, JsCast, JsValue};
 use wasm_bindgen_futures::{future_to_promise, JsFuture};
 use web_sys::{
-    Document, HtmlButtonElement, HtmlDialogElement, HtmlElement, HtmlInputElement,
-    HtmlParagraphElement, HtmlSelectElement, HtmlSpanElement, Response, Window,
+    Document, Geolocation, HtmlButtonElement, HtmlDialogElement, HtmlElement, HtmlInputElement,
+    HtmlParagraphElement, HtmlSelectElement, HtmlSpanElement, PositionOptions, Response, Window,
 };
 
 use crate::render::RenderEngine;
@@ -32,9 +36,10 @@ const API_URL: &str = "/api";
 const AD9361_URL: &str = "/api/ad9361";
 const DDC_CONFIG_URL: &str = "/api/ddc/config";
 const DDC_DESIGN_URL: &str = "/api/ddc/design";
-const SPECTROMETER_URL: &str = "/api/spectrometer";
+const GEOLOCATION_URL: &str = "/api/geolocation";
 const RECORDER_URL: &str = "/api/recorder";
 const RECORDING_METADATA_URL: &str = "/api/recording/metadata";
+const SPECTROMETER_URL: &str = "/api/spectrometer";
 const TIME_URL: &str = "/api/time";
 
 /// User interface.
@@ -47,6 +52,8 @@ pub struct Ui {
     document: Rc<Document>,
     elements: Elements,
     api_state: Rc<RefCell<Option<maia_json::Api>>>,
+    geolocation: Rc<RefCell<Option<Geolocation>>>,
+    geolocation_watch_id: Rc<Cell<Option<i32>>>,
     local_settings: Rc<RefCell<LocalSettings>>,
     preferences: Rc<RefCell<preferences::Preferences>>,
     render_engine: Rc<RefCell<RenderEngine>>,
@@ -70,9 +77,11 @@ ui_elements! {
     recording_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
     ddc_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
     waterfall_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
+    geolocation_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
     recording_panel: HtmlElement => Rc<HtmlElement>,
     ddc_panel: HtmlElement => Rc<HtmlElement>,
     waterfall_panel: HtmlElement => Rc<HtmlElement>,
+    geolocation_panel: HtmlElement => Rc<HtmlElement>,
     waterfall_min: HtmlInputElement => NumberInput<f32>,
     waterfall_max: HtmlInputElement => NumberInput<f32>,
     ad9361_rx_lo_frequency: HtmlInputElement
@@ -101,6 +110,13 @@ ui_elements! {
     recording_metadata_author: HtmlInputElement => TextInput,
     recorder_mode: HtmlSelectElement => EnumInput<maia_json::RecorderMode>,
     recorder_maximum_duration: HtmlInputElement => NumberInput<f64>,
+    recording_metadata_geolocation: HtmlSpanElement => Rc<HtmlSpanElement>,
+    recording_metadata_geolocation_update: HtmlButtonElement => Rc<HtmlButtonElement>,
+    recording_metadata_geolocation_clear: HtmlButtonElement => Rc<HtmlButtonElement>,
+    geolocation_point: HtmlSpanElement => Rc<HtmlSpanElement>,
+    geolocation_update: HtmlButtonElement => Rc<HtmlButtonElement>,
+    geolocation_watch: HtmlInputElement => CheckboxInput,
+    geolocation_clear: HtmlButtonElement => Rc<HtmlButtonElement>,
 }
 
 #[derive(Default)]
@@ -123,6 +139,8 @@ impl Ui {
             document,
             elements,
             api_state: Rc::new(RefCell::new(None)),
+            geolocation: Rc::new(RefCell::new(None)),
+            geolocation_watch_id: Rc::new(Cell::new(None)),
             local_settings: Rc::new(RefCell::new(LocalSettings::default())),
             preferences,
             render_engine,
@@ -159,7 +177,8 @@ impl Ui {
             recording_metadata_description,
             recording_metadata_author,
             recorder_mode,
-            recorder_maximum_duration
+            recorder_maximum_duration,
+            geolocation_watch
         );
 
         // This uses a custom onchange function that calls the macro-generated one.
@@ -176,9 +195,14 @@ impl Ui {
             settings_button,
             close_alert,
             close_settings,
+            recording_metadata_geolocation_update,
+            recording_metadata_geolocation_clear,
+            geolocation_update,
+            geolocation_clear,
             recording_tab,
             ddc_tab,
-            waterfall_tab
+            waterfall_tab,
+            geolocation_tab
         );
         self.elements
             .recorder_button_replica
@@ -247,7 +271,7 @@ impl Ui {
         Closure::new(move || ui.elements.settings.close())
     }
 
-    impl_tabs!(recording, ddc, waterfall);
+    impl_tabs!(recording, ddc, waterfall, geolocation);
 }
 
 // API methods
@@ -281,6 +305,7 @@ impl Ui {
         self.update_recorder_button(&json.recorder);
         self.update_recording_metadata_inactive_elements(&json.recording_metadata)?;
         self.update_recorder_inactive_elements(&json.recorder)?;
+        self.update_geolocation_elements(&json.geolocation)?;
 
         // This potentially takes some time to complete, since it might have to
         // do a fetch call to PATCH the server time. We do this last.
@@ -526,9 +551,263 @@ impl Ui {
     }
 }
 
+// Geolocation methods
+
+// the fields are required for Deserialize, but not all of them are read
+#[allow(dead_code)]
+#[derive(Debug, Copy, Clone, PartialEq, Deserialize)]
+struct GeolocationPosition {
+    coords: GeolocationCoordinates,
+    timestamp: f64,
+}
+
+// the fields are required for Deserialize, but not all of them are read
+#[allow(dead_code, non_snake_case)]
+#[derive(Debug, Copy, Clone, PartialEq, Deserialize)]
+struct GeolocationCoordinates {
+    latitude: f64,
+    longitude: f64,
+    altitude: Option<f64>,
+    accuracy: f64,
+    altitudeAccuracy: Option<f64>,
+    heading: Option<f64>,
+    speed: Option<f64>,
+}
+
+impl From<GeolocationCoordinates> for maia_json::Geolocation {
+    fn from(value: GeolocationCoordinates) -> maia_json::Geolocation {
+        maia_json::Geolocation {
+            latitude: value.latitude,
+            longitude: value.longitude,
+            altitude: value.altitude,
+        }
+    }
+}
+
+impl Ui {
+    impl_put!(
+        geolocation,
+        maia_json::DeviceGeolocation,
+        maia_json::DeviceGeolocation,
+        GEOLOCATION_URL
+    );
+
+    fn html_span_set_geolocation(element: &HtmlSpanElement, json: &maia_json::DeviceGeolocation) {
+        if let Some(geolocation) = &json.point {
+            element.set_text_content(Some(&format!(
+                "{:.6}°{} {:.6}°{}{}",
+                geolocation.latitude.abs(),
+                if geolocation.latitude >= 0.0 {
+                    "N"
+                } else {
+                    "S"
+                },
+                geolocation.longitude.abs(),
+                if geolocation.longitude >= 0.0 {
+                    "E"
+                } else {
+                    "W"
+                },
+                if let Some(altitude) = geolocation.altitude {
+                    format!(" {altitude:.1}m")
+                } else {
+                    String::new()
+                }
+            )));
+        } else {
+            element.set_text_content(None);
+        }
+    }
+
+    fn update_geolocation_elements(
+        &self,
+        json: &maia_json::DeviceGeolocation,
+    ) -> Result<(), JsValue> {
+        Self::html_span_set_geolocation(&self.elements.geolocation_point, json);
+        Ok(())
+    }
+
+    fn geolocation_api(&self) -> Result<Ref<'_, Geolocation>, JsValue> {
+        {
+            let geolocation = self.geolocation.borrow();
+            if geolocation.is_some() {
+                // Geolocation object has been previously obtained. Return it.
+                return Ok(Ref::map(geolocation, |opt| opt.as_ref().unwrap()));
+            }
+        }
+        // No Geolocation object previously obtained. Get one from
+        // Navigator. This will prompt the user for authorization.
+        let geolocation = self.window.navigator().geolocation()?;
+        self.geolocation.borrow_mut().replace(geolocation);
+        Ok(Ref::map(self.geolocation.borrow(), |opt| {
+            opt.as_ref().unwrap()
+        }))
+    }
+
+    fn geolocation_update(
+        &self,
+        success_callback: Closure<dyn Fn(JsValue) -> JsValue>,
+    ) -> Closure<dyn Fn()> {
+        let success_callback = success_callback.into_js_value();
+        let error_callback = self.geolocation_error().into_js_value();
+        let ui = self.clone();
+        Closure::new(move || {
+            let geolocation_api = match ui.geolocation_api() {
+                Ok(g) => g,
+                Err(err) => {
+                    web_sys::console::error_2(&"could not get Geolocation API".into(), &err);
+                    return;
+                }
+            };
+            let options = PositionOptions::new();
+            options.set_enable_high_accuracy(true);
+            if let Err(err) = geolocation_api.get_current_position_with_error_callback_and_options(
+                success_callback.unchecked_ref(),
+                Some(error_callback.unchecked_ref()),
+                &options,
+            ) {
+                web_sys::console::error_2(&"error getting current position".into(), &err);
+            }
+        })
+    }
+
+    fn geolocation_update_onclick(&self) -> Closure<dyn Fn()> {
+        self.geolocation_update(self.geolocation_success())
+    }
+
+    fn geolocation_watch_onchange(&self) -> Closure<dyn Fn()> {
+        let success_callback = self.geolocation_success().into_js_value();
+        let error_callback = self.geolocation_error().into_js_value();
+        let ui = self.clone();
+        Closure::new(move || {
+            let geolocation_api = match ui.geolocation_api() {
+                Ok(g) => g,
+                Err(err) => {
+                    web_sys::console::error_2(&"could not get Geolocation API".into(), &err);
+                    return;
+                }
+            };
+            let enabled = ui.elements.geolocation_watch.get().unwrap();
+            if let Ok(mut prefs) = ui.preferences.try_borrow_mut() {
+                if let Err(e) = prefs.update_geolocation_watch(&enabled) {
+                    web_sys::console::error_1(&e);
+                }
+            }
+            if enabled {
+                if ui.geolocation_watch_id.get().is_some() {
+                    // This shouldn't typically happend, but just in case, do
+                    // nothing if we already have a watch_id.
+                    return;
+                }
+                let options = PositionOptions::new();
+                options.set_enable_high_accuracy(true);
+                let id = match geolocation_api.watch_position_with_error_callback_and_options(
+                    success_callback.unchecked_ref(),
+                    Some(error_callback.unchecked_ref()),
+                    &options,
+                ) {
+                    Ok(id) => id,
+                    Err(err) => {
+                        web_sys::console::error_2(&"error watching position".into(), &err);
+                        return;
+                    }
+                };
+                ui.geolocation_watch_id.set(Some(id));
+            } else {
+                // It can happen that geolocation_watch_id contains None, for
+                // instance if this onchange closure is called by
+                // preferences.apply at initialization.
+                if let Some(id) = ui.geolocation_watch_id.take() {
+                    geolocation_api.clear_watch(id);
+                }
+            }
+        })
+    }
+
+    fn parse_geolocation(&self, position: JsValue) -> Result<Option<GeolocationPosition>, JsValue> {
+        let position = serde_json::from_str::<GeolocationPosition>(
+            &js_sys::JSON::stringify(&position)?.as_string().unwrap(),
+        )
+        .map_err(|e| -> JsValue { format!("{e}").into() })?;
+        const MAXIMUM_ACCURACY: f64 = 10e3; // 10 km
+        if position.coords.accuracy > MAXIMUM_ACCURACY {
+            if let Err(err) = self.alert(&format!(
+                "Geolocation position accuracy worse than {:.0} km. Ignoring.",
+                MAXIMUM_ACCURACY * 1e-3
+            )) {
+                web_sys::console::error_2(&"alert error:".into(), &err);
+            }
+            return Ok(None);
+        }
+        Ok(Some(position))
+    }
+
+    fn geolocation_success(&self) -> Closure<dyn Fn(JsValue) -> JsValue> {
+        let ui = self.clone();
+        Closure::new(move |position| {
+            let position = match ui.parse_geolocation(position) {
+                Ok(Some(p)) => p,
+                Ok(None) => return JsValue::NULL,
+                Err(err) => {
+                    web_sys::console::error_1(&err);
+                    return JsValue::NULL;
+                }
+            };
+            let put = maia_json::DeviceGeolocation {
+                point: Some(position.coords.into()),
+            };
+            let ui = ui.clone();
+            future_to_promise(async move {
+                if let Some(response) =
+                    request::ignore_request_failed(ui.put_geolocation(&put).await)?
+                {
+                    ui.update_geolocation_elements(&response)?;
+                }
+                Ok(JsValue::NULL)
+            })
+            .into()
+        })
+    }
+
+    fn geolocation_error(&self) -> Closure<dyn Fn(JsValue)> {
+        let ui = self.clone();
+        Closure::new(move |_| {
+            if let Err(err) = ui.alert("Error obtaining geolocation") {
+                web_sys::console::error_2(&"alert error:".into(), &err);
+            }
+        })
+    }
+
+    fn geolocation_clear_onclick(&self) -> Closure<dyn Fn() -> JsValue> {
+        let ui = self.clone();
+        Closure::new(move || {
+            // force geolocation_watch to disabled
+            ui.elements.geolocation_watch.set(&false);
+            let _ = ui
+                .elements
+                .geolocation_watch
+                .onchange()
+                .unwrap()
+                .call0(&JsValue::NULL);
+
+            let put = maia_json::DeviceGeolocation { point: None };
+            let ui = ui.clone();
+            future_to_promise(async move {
+                if let Some(response) =
+                    request::ignore_request_failed(ui.put_geolocation(&put).await)?
+                {
+                    ui.update_geolocation_elements(&response)?;
+                }
+                Ok(JsValue::NULL)
+            })
+            .into()
+        })
+    }
+}
+
 // Recorder methods
 impl Ui {
-    impl_section!(
+    impl_section_custom!(
         recording_metadata,
         maia_json::RecordingMetadata,
         maia_json::PatchRecordingMetadata,
@@ -537,6 +816,19 @@ impl Ui {
         description,
         author
     );
+    impl_post_patch_update_elements_noop!(recording_metadata, maia_json::PatchRecordingMetadata);
+    impl_onchange_patch_modify_noop!(recording_metadata, maia_json::PatchRecordingMetadata);
+
+    fn post_update_recording_metadata_elements(
+        &self,
+        json: &maia_json::RecordingMetadata,
+    ) -> Result<(), JsValue> {
+        Self::html_span_set_geolocation(
+            &self.elements.recording_metadata_geolocation,
+            &json.geolocation,
+        );
+        Ok(())
+    }
 
     impl_section!(
         recorder,
@@ -600,6 +892,52 @@ impl Ui {
                 ..Default::default()
             };
             ui.patch_recorder_promise(patch)
+        })
+    }
+
+    fn recording_metadata_geolocation_update_onclick(&self) -> Closure<dyn Fn()> {
+        self.geolocation_update(self.recording_metadata_geolocation_success())
+    }
+
+    fn recording_metadata_geolocation_success(&self) -> Closure<dyn Fn(JsValue) -> JsValue> {
+        let ui = self.clone();
+        Closure::new(move |position| {
+            let position = match ui.parse_geolocation(position) {
+                Ok(Some(p)) => p,
+                Ok(None) => return JsValue::NULL,
+                Err(err) => {
+                    web_sys::console::error_1(&err);
+                    return JsValue::NULL;
+                }
+            };
+            let patch = maia_json::PatchRecordingMetadata {
+                geolocation: Some(maia_json::DeviceGeolocation {
+                    point: Some(position.coords.into()),
+                }),
+                ..Default::default()
+            };
+            let ui = ui.clone();
+            future_to_promise(async move {
+                ui.patch_recording_metadata_update_elements(&patch).await?;
+                Ok(JsValue::NULL)
+            })
+            .into()
+        })
+    }
+
+    fn recording_metadata_geolocation_clear_onclick(&self) -> Closure<dyn Fn() -> JsValue> {
+        let ui = self.clone();
+        Closure::new(move || {
+            let patch = maia_json::PatchRecordingMetadata {
+                geolocation: Some(maia_json::DeviceGeolocation { point: None }),
+                ..Default::default()
+            };
+            let ui = ui.clone();
+            future_to_promise(async move {
+                ui.patch_recording_metadata_update_elements(&patch).await?;
+                Ok(JsValue::NULL)
+            })
+            .into()
         })
     }
 }
