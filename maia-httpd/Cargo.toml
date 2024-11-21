@@ -53,4 +53,4 @@ lax = { git = "https://github.com/mike-kfed/ndarray-linalg.git", rev="cef6aa5e95
 [profile.release]
 codegen-units = 1
 lto = true
-strip = "debuginfo"
+strip = "symbols"
