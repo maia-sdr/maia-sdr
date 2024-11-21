@@ -20,7 +20,7 @@
         {
             "src:": "/maia-icon-192x192.png",
             "type": "image/png",
-            "sizes": "129x192"
+            "sizes": "192x192"
         }
     ],
     "start_url": "./index.html",
