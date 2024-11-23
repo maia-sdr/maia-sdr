@@ -11,7 +11,7 @@ keywords = ["SDR", "FPGA", "Zynq"]
 categories = ["hardware-support", "science", "web-programming::http-server", "web-programming::websocket"]
 
 [features]
-default = ["uclibc"]
+default = []
 uclibc = []
 
 [dependencies]
