@@ -11,6 +11,7 @@ use axum::{
 };
 use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;
+use std::{net::SocketAddr, path::Path};
 use tokio::sync::broadcast;
 use tower_http::{
     services::{ServeDir, ServeFile},
@@ -39,7 +40,7 @@ pub use recording::{RecorderFinishWaiter, RecorderState};
 #[derive(Debug)]
 pub struct Server {
     http_server: axum_server::Server,
-    https_server: axum_server::Server<axum_server::tls_rustls::RustlsAcceptor>,
+    https_server: Option<axum_server::Server<axum_server::tls_rustls::RustlsAcceptor>>,
     app: Router,
 }
 
@@ -59,12 +60,15 @@ impl Server {
     /// After calling this function, the server needs to be run by calling
     /// [`Server::run`].
     pub async fn new(
-        http_address: std::net::SocketAddr,
-        https_address: std::net::SocketAddr,
+        http_address: SocketAddr,
+        https_address: SocketAddr,
+        ssl_cert: Option<impl AsRef<Path>>,
+        ssl_key: Option<impl AsRef<Path>>,
+        ca_cert: Option<impl AsRef<Path>>,
         state: AppState,
         waterfall_sender: broadcast::Sender<Bytes>,
     ) -> Result<Server> {
-        let app = Router::new()
+        let mut app = Router::new()
             // all the following routes have .with_state(state)
             .route("/api", get(api::get_api))
             .route(
@@ -125,7 +129,12 @@ impl Server {
                 "/waterfall",
                 get(websocket::handler).with_state(waterfall_sender),
             )
-            .route("/zeros", get(zeros::get_zeros)) // used for benchmarking
+            .route("/zeros", get(zeros::get_zeros)); // used for benchmarking
+        if let Some(ca_cert) = &ca_cert {
+            // Maia SDR CA certificate
+            app = app.route_service("/ca.crt", ServeFile::new(ca_cert));
+        }
+        let app = app
             // IQEngine viewer for IQ recording
             .route_service(
                 "/view/api/maiasdr/maiasdr/recording",
@@ -137,14 +146,13 @@ impl Server {
         tracing::info!(%http_address, "starting HTTP server");
         let http_server = axum_server::bind(http_address);
         tracing::info!(%https_address, "starting HTTPS server");
-        let https_server = axum_server::bind_rustls(
-            https_address,
-            RustlsConfig::from_pem(
-                include_bytes!("httpd/self_signed_cert/cert.pem").to_vec(),
-                include_bytes!("httpd/self_signed_cert/key.pem").to_vec(),
-            )
-            .await?,
-        );
+        let https_server = match (&ssl_cert, &ssl_key) {
+            (Some(ssl_cert), Some(ssl_key)) => Some(axum_server::bind_rustls(
+                https_address,
+                RustlsConfig::from_pem_file(ssl_cert, ssl_key).await?,
+            )),
+            _ => None,
+        };
         Ok(Server {
             http_server,
             https_server,
@@ -157,11 +165,15 @@ impl Server {
     /// This only returns if there is a fatal error.
     pub async fn run(self) -> Result<()> {
         let http_server = self.http_server.serve(self.app.clone().into_make_service());
-        let https_server = self.https_server.serve(self.app.into_make_service());
-        Ok(tokio::select! {
-            ret = http_server => ret,
-            ret = https_server => ret,
-        }?)
+        if let Some(https_server) = self.https_server {
+            let https_server = https_server.serve(self.app.into_make_service());
+            Ok(tokio::select! {
+                ret = http_server => ret,
+                ret = https_server => ret,
+            }?)
+        } else {
+            Ok(http_server.await?)
+        }
     }
 }
 
