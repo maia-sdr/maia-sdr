@@ -78,10 +78,12 @@ ui_elements! {
     ddc_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
     waterfall_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
     geolocation_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
+    other_tab: HtmlButtonElement => Rc<HtmlButtonElement>,
     recording_panel: HtmlElement => Rc<HtmlElement>,
     ddc_panel: HtmlElement => Rc<HtmlElement>,
     waterfall_panel: HtmlElement => Rc<HtmlElement>,
     geolocation_panel: HtmlElement => Rc<HtmlElement>,
+    other_panel: HtmlElement => Rc<HtmlElement>,
     waterfall_min: HtmlInputElement => NumberInput<f32>,
     waterfall_max: HtmlInputElement => NumberInput<f32>,
     ad9361_rx_lo_frequency: HtmlInputElement
@@ -117,6 +119,7 @@ ui_elements! {
     geolocation_update: HtmlButtonElement => Rc<HtmlButtonElement>,
     geolocation_watch: HtmlInputElement => CheckboxInput,
     geolocation_clear: HtmlButtonElement => Rc<HtmlButtonElement>,
+    maia_wasm_version: HtmlSpanElement => Rc<HtmlSpanElement>,
 }
 
 #[derive(Default)]
@@ -146,6 +149,13 @@ impl Ui {
             render_engine,
             waterfall,
         };
+        ui.elements
+            .maia_wasm_version
+            .set_text_content(Some(&format!(
+                "v{} git {}",
+                crate::version::maia_wasm_version(),
+                crate::version::maia_wasm_git_version()
+            )));
         ui.set_callbacks()?;
         ui.preferences.borrow().apply(&ui)?;
         ui.set_callbacks_post_apply()?;
@@ -202,7 +212,8 @@ impl Ui {
             recording_tab,
             ddc_tab,
             waterfall_tab,
-            geolocation_tab
+            geolocation_tab,
+            other_tab
         );
         self.elements
             .recorder_button_replica
@@ -271,7 +282,7 @@ impl Ui {
         Closure::new(move || ui.elements.settings.close())
     }
 
-    impl_tabs!(recording, ddc, waterfall, geolocation);
+    impl_tabs!(recording, ddc, waterfall, geolocation, other);
 }
 
 // API methods

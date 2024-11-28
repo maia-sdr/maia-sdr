@@ -37,6 +37,9 @@
           <button id="geolocation_tab" role="tab" aria-selected="false" aria-controls="geolocation_panel">
             Geolocation
           </button>
+          <button id="other_tab" role="tab" aria-selected="false" aria-controls="other_panel">
+            Other
+          </button>
           <button id="close_settings" value="close" autofocus>Close</button>
         </div>
         <div id="recording_panel" class="" role="tabpanel" aria-labelledby="recording_tab">
@@ -113,6 +116,10 @@
               <input type="checkbox" id="geolocation_watch">
             </div>
           </form>
+        </div>
+        <div id="other_panel" class="hidden" role="tabpanel" aria-labelledby="other_tab">
+          <a href="ca.crt">CA certificate</a>
+          <p>maia-wasm <span id="maia_wasm_version"></span></p>
         </div>
     </dialog>
 
