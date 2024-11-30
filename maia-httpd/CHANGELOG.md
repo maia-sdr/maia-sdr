@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.5.3 - 2024-11-30
+
+### Added
+
+- Geolocation to REST API
+- HTTPS server
+
+### Changed
+
+- Strip all symbols in release binary
+- Disable some unused tokio features
+
 ## 0.5.2 - 2024-10-12
 
 ### Changed
