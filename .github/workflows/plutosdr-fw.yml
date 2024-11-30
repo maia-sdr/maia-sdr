@@ -11,11 +11,6 @@ jobs:
   build-fw:
     name: Build Pluto SDR firmware
     runs-on: [self-hosted, vivado]
-    container:
-      image: ghcr.io/maia-sdr/maia-sdr-devel:latest
-      volumes:
-        - vivado2022_2:/opt/Xilinx
-      options: --user root
     steps:
     - name: Checkout plutosdr-fw
       uses: actions/checkout@v4
@@ -32,30 +27,8 @@ jobs:
         fetch-depth: 0
         submodules: recursive
     - name: Build firmware
-      # xsct, which is run by the make process, uses Xvfb, which usually needs a
-      # connection to an X server (even though it is a CLI application). We run
-      # Xvfb in the container to create a "fake" X session that makes xsct
-      # happy.
-      #
-      # We cannot '.' the main settings.sh file for Vivado, because it uses
-      # 'source' to run the sub-files, and we are not using bash. Instead, we
-      # '.' each individual sub-file.
-      #
-      # ADI_IGNORE_VERSION_CHECK is required because we use Vivado 2022.2.2
-      # instead of 2022.2.
       run: |
-        . /opt/Xilinx/Vitis/2022.2/.settings64-Vitis.sh
-        . /opt/Xilinx/Vivado/2022.2/.settings64-Vivado.sh
-        . /opt/Xilinx/Vitis_HLS/2022.2/.settings64-Vitis_HLS.sh
-        . /opt/rust/env
-        export PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin/:/usr/bin:/sbin:/bin:$PATH:/opt/oss-cad-suite/bin
-        export PYTHONPATH=/usr/local/lib/python3.10/dist-packages
-        apt-get update
-        DEBIAN_FRONTEND=noninteractive apt-get install -y xvfb
-        Xvfb :10 &
-        export DISPLAY=:10
-        export ADI_IGNORE_VERSION_CHECK=1
-        make
+        DOCKER_USER="$(id -u):$(id -g)" docker compose run --rm build        
     - name: Upload artifacts
       uses: actions/upload-artifact@v4
       with:
@@ -63,7 +36,6 @@ jobs:
         path: |
           build/pluto.dfu
           build/pluto.frm
-        if-no-files-found: error
     # The working directory in the self-hosted runner needs be cleaned before
     # building. We use if: ${{ always() }} to clean even if the build fails.
     - name: Clean up runner working dir
