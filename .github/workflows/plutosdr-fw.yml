@@ -36,6 +36,7 @@ jobs:
         path: |
           build/pluto.dfu
           build/pluto.frm
+        if-no-files-found: error
     # The working directory in the self-hosted runner needs be cleaned before
     # building. We use if: ${{ always() }} to clean even if the build fails.
     - name: Clean up runner working dir
