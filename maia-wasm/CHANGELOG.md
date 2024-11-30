@@ -7,6 +7,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.1 - 2024-11-30
+
+### Added
+
+- HTTPS support
+- Geolocation
+- Other tab in settings dialog
+
+### Changed
+
+- Responsive layout tweaks for narrow screens
+
+### Fixed
+
+- Typo in manifest.json icon size
+
 ## 0.6.0 - 2024-10-12
 
 ### Added
