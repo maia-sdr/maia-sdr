@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.1 - 2024-11-30
+
+### Added
+
+- Configuration support for the Maia SDR top-level
+- Vivado projects for pluto-iio and plutoplus-iio including Maia SDR and ADI IIO DMA
+
+### Changed
+
+- Updated ADI hdl repository to the one used in plutosdr-fw v0.39 (based on Vivado 2023.2)
+
 ## 0.6.0 - 2024-09-07
 
 ### Changed

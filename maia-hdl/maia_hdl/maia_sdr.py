@@ -25,7 +25,7 @@ from .recorder import Recorder16IQ, RecorderMode
 from .spectrometer import Spectrometer
 
 # IP core version
-_version = '0.6.0'
+_version = '0.6.1'
 
 
 class MaiaSDR(Elaboratable):
