@@ -34,10 +34,10 @@ jobs:
     - name: cargo test
       run: cargo test --verbose
   publish:
+    name: Publish Rust crate
+    runs-on: ubuntu-latest
     if: startsWith(github.event.ref, 'refs/tags/maia-wasm-')
     needs: [wasm, x86_64]
-    uses: ./.github/workflows/publish.yml
-    with:
-      path: maia-wasm
-    secrets:
-      registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+    - name: Publish crate
+      run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
