@@ -134,54 +134,62 @@ class TestPackFifoTwice(AmaranthSim):
     def test_pack(self):
         nsamples = 4096
         x = np.random.randint(-2**31, 2**31, size=nsamples)
-        self.dut = PackFifoTwice()
+        dut = PackFifoTwice()
+        m = Module()
+        m.submodules.dut = dut
+        # It is necessary for the test to read a registered version of rden
+        # because rden is driven combinationally by the dut depending on test
+        # inputs, so reading rden from the test is prone to race conditions.
+        rden_q = Signal()
+        m.d.sync += rden_q.eq(dut.rden)
+        self.dut = m
 
         async def set_input(ctx):
-            ctx.set(self.dut.enable, 1)
+            ctx.set(dut.enable, 1)
             for a in x:
-                ctx.set(self.dut.empty, 1)
-                while True:
-                    if np.random.randint(2):
-                        break
+                ctx.set(dut.empty, 1)
+                while np.random.randint(4):
+                    if ctx.get(rden_q):
+                        ctx.set(dut.fifo_data, int(a))
+                        continue
                     await ctx.tick()
-                ctx.set(self.dut.empty, 0)
-                while True:
+                ctx.set(dut.empty, 0)
+                while not ctx.get(rden_q):
                     await ctx.tick()
-                    if ctx.get(self.dut.rden):
-                        break
-                ctx.set(self.dut.fifo_data, int(a))
-            ctx.set(self.dut.empty, 1)
+                ctx.set(dut.fifo_data, int(a))
+                await ctx.tick()
 
         async def check_output(ctx):
             data = np.zeros(nsamples // 2, 'uint64')
             for j in range(data.size):
-                ctx.set(self.dut.out_ready, 0)
-                while True:
-                    if np.random.randint(2):
-                        break
+                await ctx.tick()
+                ctx.set(dut.out_ready, 0)
+                while np.random.randint(2):
                     await ctx.tick()
-                ctx.set(self.dut.out_ready, 1)
-                while True:
+                ctx.set(dut.out_ready, 1)
+                while not ctx.get(dut.out_valid):
                     await ctx.tick()
-                    if ctx.get(self.dut.out_valid):
-                        break
-                data[j] = ctx.get(self.dut.out_data)
+                data[j] = ctx.get(dut.out_data)
+                # earlier check of this data (to fail early on error)
+                words = data[j:j+1].view('int32')
+                np.testing.assert_equal(x[2*j:2*(j+1)], words,
+                                        f'error on data[{j}]')
             await ctx.tick().repeat(2)
-            ctx.set(self.dut.enable, 0)
+            ctx.set(dut.enable, 0)
             data_samples = data.view('int32')
             np.testing.assert_equal(x, data_samples)
 
         async def check_rderr(ctx):
             while True:
                 await ctx.tick()
-                if ctx.get(self.dut.enable):
+                if ctx.get(dut.enable):
                     break
             while True:
                 await ctx.tick()
-                if not ctx.get(self.dut.enable):
+                if not ctx.get(dut.enable):
                     break
-                rden = ctx.get(self.dut.rden)
-                empty = ctx.get(self.dut.empty)
+                rden = ctx.get(dut.rden)
+                empty = ctx.get(dut.empty)
                 assert not empty or not rden
 
         self.simulate([set_input, check_output, check_rderr])
