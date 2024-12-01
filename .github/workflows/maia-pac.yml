@@ -4,10 +4,16 @@ on:
     tags:
       - maia-pac-**
 
+env:
+  CARGO_TERM_COLOR: always
+
+defaults:
+  run:
+    working-directory: maia-httpd/maia-pac
+
 jobs:
   publish:
-    uses: ./.github/workflows/publish.yml
-    with:
-      path: maia-httpd/maia-pac
-    secrets:
-      registry-token: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+    - name: Publish Rust crate
+      runs-on: ubuntu-latest
+      run: cargo publish --token ${{ secrets.CARGO_REGISTRY_TOKEN }}
