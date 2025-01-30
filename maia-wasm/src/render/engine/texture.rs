@@ -41,7 +41,7 @@ pub struct TextureBuilder<'a> {
     texture: Rc<WebGlTexture>,
 }
 
-impl<'a> TextureBuilder<'a> {
+impl TextureBuilder<'_> {
     pub(super) fn new(engine: &mut RenderEngine) -> Result<TextureBuilder<'_>, JsValue> {
         let texture = Rc::new(
             engine
