@@ -128,7 +128,7 @@ impl PointerTracker {
         // found).
         if let Some(slot) = self.slots.iter_mut().find(|x| {
             x.as_ref()
-                .map_or(false, |x| x.event.pointer_id() == pointer_id)
+                .is_some_and(|x| x.event.pointer_id() == pointer_id)
         }) {
             // Remove event.
             slot.take();

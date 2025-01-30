@@ -14,7 +14,7 @@ pub struct VaoBuilder<'a> {
     vao: Rc<WebGlVertexArrayObject>,
 }
 
-impl<'a> VaoBuilder<'a> {
+impl VaoBuilder<'_> {
     pub(super) fn new(engine: &mut RenderEngine) -> Result<VaoBuilder<'_>, JsValue> {
         let vao = Rc::new(
             engine

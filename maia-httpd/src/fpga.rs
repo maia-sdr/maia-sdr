@@ -146,10 +146,10 @@ macro_rules! impl_set_ddc_fir {
             }
             // Pretend that the coefficient list length is divisible by decimation
             // by "virtually" extending the list with zeros.
-            let operations = (coefficients.len() + decimation - 1) / decimation;
+            let operations = coefficients.len().div_ceil(decimation);
             let odd_operations = operations % 2 == 1;
             let operations = if $do_fold {
-                (operations + 1) / 2
+                operations.div_ceil(2)
             } else {
                 operations
             };
@@ -517,14 +517,14 @@ impl IpCore {
 
         let n = self.ddc_config.fir1.coefficients.len();
         let d = usize::try_from(self.ddc_config.fir1.decimation).unwrap();
-        let operations = ((n + d - 1) / d + 1) / 2;
+        let operations = n.div_ceil(d).div_ceil(2);
         let mut max_input_sampling_frequency = constants::CLOCK_FREQUENCY / operations as f64;
         let mut decimation = d;
 
         if let Some(fir) = &self.ddc_config.fir2 {
             let n = fir.coefficients.len();
             let d = usize::try_from(fir.decimation).unwrap();
-            let operations = (n + d - 1) / d;
+            let operations = n.div_ceil(d);
             max_input_sampling_frequency = max_input_sampling_frequency
                 .min(constants::CLOCK_FREQUENCY * decimation as f64 / operations as f64);
             decimation *= d;
@@ -533,7 +533,7 @@ impl IpCore {
         if let Some(fir) = &self.ddc_config.fir3 {
             let n = fir.coefficients.len();
             let d = usize::try_from(fir.decimation).unwrap();
-            let operations = ((n + d - 1) / d + 1) / 2;
+            let operations = n.div_ceil(d).div_ceil(2);
             max_input_sampling_frequency = max_input_sampling_frequency
                 .min(constants::CLOCK_FREQUENCY * decimation as f64 / operations as f64);
             decimation *= d;
