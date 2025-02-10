@@ -34,7 +34,7 @@ async fn handle_socket(socket: WebSocket, receiver: broadcast::Receiver<Bytes>) 
     let send = BroadcastStream::new(receiver)
         .filter_map(|x| async move {
             match x {
-                Ok(bytes) => Some(Ok(Message::Binary(bytes.to_vec()))),
+                Ok(bytes) => Some(Ok(Message::Binary(bytes))),
                 Err(BroadcastStreamRecvError::Lagged(lagged)) => {
                     tracing::info!("client lagged {} items", lagged);
                     None
