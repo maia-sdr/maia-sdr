@@ -140,7 +140,7 @@ impl Server {
                 "/view/api/maiasdr/maiasdr/recording",
                 ServeFile::new("iqengine/index.html"),
             )
-            .route("/assets/:filename", get(iqengine::serve_assets))
+            .route("/assets/{filename}", get(iqengine::serve_assets))
             .fallback_service(ServeDir::new("."))
             .layer(TraceLayer::new_for_http());
         tracing::info!(%http_address, "starting HTTP server");
