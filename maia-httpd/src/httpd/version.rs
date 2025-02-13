@@ -1,7 +1,7 @@
 use super::json_error::JsonError;
 use crate::{app::AppState, fpga::IpCore};
 use anyhow::Result;
-use axum::{extract::State, response::Html};
+use axum::{extract::State, response::Html, Json};
 use std::sync::Mutex;
 
 async fn fw_version() -> Result<String> {
@@ -16,6 +16,7 @@ async fn fw_version() -> Result<String> {
     ))
 }
 
+// this is deprecated and will be removed in the future
 async fn version(ip_core: &Mutex<IpCore>) -> Result<String> {
     Ok(format!(
         r#"<!doctype html>
@@ -54,9 +55,28 @@ async fn version(ip_core: &Mutex<IpCore>) -> Result<String> {
     ))
 }
 
+pub async fn versions(ip_core: &Mutex<IpCore>) -> Result<maia_json::Versions> {
+    Ok(maia_json::Versions {
+        firmware_version: fw_version().await?,
+        maia_httpd_git: git_version::git_version!(fallback = "unknown").to_string(),
+        maia_httpd_version: env!("CARGO_PKG_VERSION").to_string(),
+        maia_hdl_version: ip_core.lock().unwrap().version(),
+    })
+}
+
+// this is deprecated and will be removed in the future
 pub async fn get_version(State(state): State<AppState>) -> Result<Html<String>, JsonError> {
     version(state.ip_core())
         .await
         .map_err(JsonError::server_error)
         .map(Html)
+}
+
+pub async fn get_versions(
+    State(state): State<AppState>,
+) -> Result<Json<maia_json::Versions>, JsonError> {
+    versions(state.ip_core())
+        .await
+        .map_err(JsonError::server_error)
+        .map(Json)
 }

@@ -119,6 +119,9 @@ ui_elements! {
     geolocation_update: HtmlButtonElement => Rc<HtmlButtonElement>,
     geolocation_watch: HtmlInputElement => CheckboxInput,
     geolocation_clear: HtmlButtonElement => Rc<HtmlButtonElement>,
+    firmware_version: HtmlSpanElement => Rc<HtmlSpanElement>,
+    maia_httpd_version: HtmlSpanElement => Rc<HtmlSpanElement>,
+    maia_hdl_version: HtmlSpanElement => Rc<HtmlSpanElement>,
     maia_wasm_version: HtmlSpanElement => Rc<HtmlSpanElement>,
 }
 
@@ -317,6 +320,7 @@ impl Ui {
         self.update_recording_metadata_inactive_elements(&json.recording_metadata)?;
         self.update_recorder_inactive_elements(&json.recorder)?;
         self.update_geolocation_elements(&json.geolocation)?;
+        self.update_versions_elements(&json.versions);
 
         // This potentially takes some time to complete, since it might have to
         // do a fetch call to PATCH the server time. We do this last.
@@ -1016,6 +1020,24 @@ impl Ui {
             request::ignore_request_failed(self.patch_time(&patch).await)?;
         }
         Ok(())
+    }
+}
+
+// Versions methods
+impl Ui {
+    fn update_versions_elements(&self, json: &maia_json::Versions) {
+        self.elements
+            .firmware_version
+            .set_text_content(Some(&json.firmware_version));
+        self.elements
+            .maia_httpd_version
+            .set_text_content(Some(&format!(
+                "v{} git {}",
+                json.maia_httpd_version, json.maia_httpd_git,
+            )));
+        self.elements
+            .maia_hdl_version
+            .set_text_content(Some(&json.maia_hdl_version));
     }
 }
 

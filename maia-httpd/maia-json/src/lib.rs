@@ -24,6 +24,8 @@ pub struct Api {
     pub spectrometer: Spectrometer,
     /// System time.
     pub time: Time,
+    /// Versions information.
+    pub versions: Versions,
 }
 
 /// AD9361 JSON schema.
@@ -571,6 +573,31 @@ impl From<Time> for PatchTime {
 pub struct DeviceGeolocation {
     /// Current device geolocation.
     pub point: Option<Geolocation>,
+}
+
+/// Versions information.
+///
+/// This JSON schema corresponds to GET requests on `/api/versions`.
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq, Default, Hash)]
+pub struct Versions {
+    /// Firmware version.
+    ///
+    /// This is obtained from the `fw_version` variable in `/etc/libiio.ini`.
+    pub firmware_version: String,
+    /// git version for maia-httpd.
+    ///
+    /// This is the git version of the maia-sdr repository checkout from which
+    /// maia-httpd was built.
+    pub maia_httpd_git: String,
+    /// maia-httpd version.
+    ///
+    /// This is the version of the maia-httpd crate as reported by cargo.
+    pub maia_httpd_version: String,
+    /// maia-hdl version.
+    ///
+    /// This is the version of the maia-hdl IP core as reported by the IP core
+    /// registers.
+    pub maia_hdl_version: String,
 }
 
 /// Error.
