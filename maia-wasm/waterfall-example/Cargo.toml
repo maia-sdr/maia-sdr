@@ -1,7 +1,7 @@
 [package]
 name = "waterfall-example"
-version = "0.1.2"
-edition = "2021"
+version = "0.2.0"
+edition = "2024"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR waterfall example"
 license = "MIT OR Apache-2.0"

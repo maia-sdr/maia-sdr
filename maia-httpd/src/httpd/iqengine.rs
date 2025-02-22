@@ -3,7 +3,7 @@ use anyhow::Result;
 use axum::{extract::Path, http::header, response::IntoResponse};
 use std::io::Read;
 
-pub async fn decompress_asset(filename: &str) -> Result<impl IntoResponse> {
+pub async fn decompress_asset(filename: &str) -> Result<impl IntoResponse + use<>> {
     let path = std::path::Path::new("iqengine").join(format!("{}.lz4", filename));
     let compressed = tokio::fs::read(path).await?;
     let decompressed = tokio::task::spawn_blocking(move || -> Result<Vec<u8>> {
