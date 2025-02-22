@@ -6,7 +6,7 @@
 
 use anyhow::Result;
 use pm_remez::{
-    constant, linear, order_estimates::ichige, pm_parameters, pm_remez, BandSetting, PMDesign,
+    BandSetting, PMDesign, constant, linear, order_estimates::ichige, pm_parameters, pm_remez,
 };
 
 pub mod constants;

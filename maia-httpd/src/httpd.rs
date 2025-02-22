@@ -6,8 +6,8 @@
 use crate::app::AppState;
 use anyhow::Result;
 use axum::{
-    routing::{get, put},
     Router,
+    routing::{get, put},
 };
 use axum_server::tls_rustls::RustlsConfig;
 use bytes::Bytes;

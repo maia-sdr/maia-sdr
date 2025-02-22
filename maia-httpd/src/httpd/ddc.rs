@@ -1,7 +1,7 @@
 use super::json_error::JsonError;
 use crate::{app::AppState, ddc};
 use anyhow::Result;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use maia_json::{DDCConfig, DDCConfigSummary, PatchDDCConfig, PutDDCConfig, PutDDCDesign};
 
 async fn ddc_config(state: &AppState) -> Result<Json<DDCConfig>, JsonError> {

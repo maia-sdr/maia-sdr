@@ -4,9 +4,9 @@
 //! render engine contained in [`crate::render`].
 
 use crate::render::{
-    texture_formats::{R16f, Rgb},
     DrawMode, ProgramSource, RenderEngine, RenderObject, Texture, TextureMagFilter,
     TextureMinFilter, TextureParameter, TextureWrap, Uniform, UniformValue,
+    texture_formats::{R16f, Rgb},
 };
 use std::cell::Cell;
 use std::rc::Rc;

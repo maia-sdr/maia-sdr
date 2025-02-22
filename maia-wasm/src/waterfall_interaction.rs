@@ -9,8 +9,8 @@ use crate::ui::Ui;
 use crate::waterfall::Waterfall;
 use std::cell::{Cell, RefCell};
 use std::rc::Rc;
-use wasm_bindgen::prelude::*;
 use wasm_bindgen::JsCast;
+use wasm_bindgen::prelude::*;
 use web_sys::{HtmlCanvasElement, PointerEvent, WheelEvent, Window};
 
 /// Waterfall interaction controller.

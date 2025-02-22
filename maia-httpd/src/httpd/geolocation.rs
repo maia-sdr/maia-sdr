@@ -1,7 +1,7 @@
 use super::json_error::JsonError;
 use crate::app::AppState;
 use anyhow::Result;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use maia_json::{DeviceGeolocation, Geolocation};
 
 pub fn device_geolocation(state: &AppState) -> DeviceGeolocation {

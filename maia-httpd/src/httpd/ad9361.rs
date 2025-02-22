@@ -1,7 +1,7 @@
 use super::json_error::JsonError;
 use crate::{app::AppState, iio};
 use anyhow::Result;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use maia_json::{Ad9361, PatchAd9361};
 
 macro_rules! get_attributes {

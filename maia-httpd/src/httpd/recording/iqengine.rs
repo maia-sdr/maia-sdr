@@ -1,5 +1,5 @@
 use super::super::json_error::JsonError;
-use super::{unpack_12bit_to_16bit, RecorderMode, RecorderState, RecordingBufferInfo};
+use super::{RecorderMode, RecorderState, RecordingBufferInfo, unpack_12bit_to_16bit};
 use crate::app::AppState;
 use anyhow::Result;
 use axum::extract::{Query, State};
