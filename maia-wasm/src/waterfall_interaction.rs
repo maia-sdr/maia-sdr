@@ -112,7 +112,7 @@ impl WaterfallInteraction {
             .set_onpointermove(Some(self.onpointermove().into_js_value().unchecked_ref()));
     }
 
-    fn resize_canvas(&self) -> impl Fn() {
+    fn resize_canvas(&self) -> impl Fn() + use<> {
         let render_engine = Rc::clone(&self.render_engine);
         let waterfall = Rc::clone(&self.waterfall);
         move || {

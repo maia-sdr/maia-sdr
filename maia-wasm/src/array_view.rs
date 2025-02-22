@@ -36,7 +36,7 @@ macro_rules! impl_array_view {
             type JS = $js;
             const GL_TYPE: u32 = $gl;
             unsafe fn view(rust: &[$rust]) -> $js {
-                <$js>::view(rust)
+                unsafe { <$js>::view(rust) }
             }
         }
     };
