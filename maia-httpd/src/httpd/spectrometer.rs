@@ -1,7 +1,7 @@
 use super::json_error::JsonError;
 use crate::app::AppState;
 use anyhow::Result;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 use maia_json::{PatchSpectrometer, Spectrometer};
 
 // TODO: do not hardcode FFT size

@@ -2,7 +2,7 @@ use anyhow::Result;
 #[cfg(not(feature = "uclibc"))]
 use clap::Parser;
 use maia_httpd::{app::App, args::Args};
-use tracing_subscriber::{fmt, prelude::*, EnvFilter};
+use tracing_subscriber::{EnvFilter, fmt, prelude::*};
 
 #[tokio::main]
 async fn main() -> Result<()> {

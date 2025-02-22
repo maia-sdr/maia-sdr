@@ -3,7 +3,7 @@ use anyhow::Result;
 use axum::Json;
 use maia_json::{PatchTime, Time};
 use nix::{
-    sys::time::{time_t, TimeSpec},
+    sys::time::{TimeSpec, time_t},
     time::ClockId,
 };
 use std::{ffi::c_long, time::UNIX_EPOCH};

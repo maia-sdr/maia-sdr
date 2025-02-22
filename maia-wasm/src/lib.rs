@@ -6,7 +6,7 @@
 
 use std::cell::RefCell;
 use std::rc::Rc;
-use wasm_bindgen::{prelude::*, JsCast};
+use wasm_bindgen::{JsCast, prelude::*};
 use web_sys::{Document, HtmlCanvasElement, Window};
 
 use crate::render::RenderEngine;

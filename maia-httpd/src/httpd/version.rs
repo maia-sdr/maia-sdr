@@ -1,7 +1,7 @@
 use super::json_error::JsonError;
 use crate::{app::AppState, fpga::IpCore};
 use anyhow::Result;
-use axum::{extract::State, response::Html, Json};
+use axum::{Json, extract::State, response::Html};
 use std::sync::Mutex;
 
 async fn fw_version() -> Result<String> {

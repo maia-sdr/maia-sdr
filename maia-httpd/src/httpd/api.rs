@@ -10,7 +10,7 @@ use super::{
 };
 use crate::app::AppState;
 use anyhow::Result;
-use axum::{extract::State, Json};
+use axum::{Json, extract::State};
 
 async fn api_json(state: &AppState) -> Result<maia_json::Api> {
     let ad9361 = {

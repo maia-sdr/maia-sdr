@@ -10,8 +10,8 @@ use std::{
     cell::{Cell, Ref, RefCell},
     rc::Rc,
 };
-use wasm_bindgen::{closure::Closure, JsCast, JsValue};
-use wasm_bindgen_futures::{future_to_promise, JsFuture};
+use wasm_bindgen::{JsCast, JsValue, closure::Closure};
+use wasm_bindgen_futures::{JsFuture, future_to_promise};
 use web_sys::{
     Document, Geolocation, HtmlButtonElement, HtmlDialogElement, HtmlElement, HtmlInputElement,
     HtmlParagraphElement, HtmlSelectElement, HtmlSpanElement, PositionOptions, Response, Window,
