@@ -14,6 +14,7 @@ use bytes::Bytes;
 use std::{net::SocketAddr, path::Path};
 use tokio::sync::broadcast;
 use tower_http::{
+    cors::CorsLayer,
     services::{ServeDir, ServeFile},
     trace::TraceLayer,
 };
@@ -143,6 +144,7 @@ impl Server {
             )
             .route("/assets/{filename}", get(iqengine::serve_assets))
             .fallback_service(ServeDir::new("."))
+            .layer(CorsLayer::permissive()) // allow requests from any origin
             .layer(TraceLayer::new_for_http());
         tracing::info!(%http_address, "starting HTTP server");
         let http_server = axum_server::bind(http_address);
