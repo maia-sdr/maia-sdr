@@ -864,7 +864,7 @@ impl Waterfall {
                 .copied()
                 .enumerate()
                 .filter(|&(_, n)| 2 * n <= 1 << 16)
-                .last()
+                .next_back()
                 .unwrap();
             freqs.truncate(ndepth);
             nfreqs.truncate(depth + 1);
