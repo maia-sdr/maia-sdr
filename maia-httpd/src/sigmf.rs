@@ -6,7 +6,7 @@ use anyhow::Result;
 use chrono::prelude::*;
 use serde_json::json;
 
-const SIGMF_VERSION: &str = "1.0.0";
+const SIGMF_VERSION: &str = "1.2.3";
 const SIGMF_RECORDER: &str = concat!("Maia SDR v", env!("CARGO_PKG_VERSION"));
 
 /// SigMF metadata.
