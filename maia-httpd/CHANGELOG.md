@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.0 - 2025-04-12
+
+### Added
+
+- Versions to REST API
+
+### Changed
+
+- Update to Rust edition 2024
+- Update SigMF version to 1.2.3
+- Updated dependencies
+
 ## 0.5.3 - 2024-11-30
 
 ### Added
