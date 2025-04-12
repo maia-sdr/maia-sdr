@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## Unreleased
 
+## 0.6.0 - 2024-12-04
+
+### Added
+
+- Versions in REST API
+
+### Changed
+
+- Update to Rust edition 2024
+
 ## 0.5.0 - 2024-11-30
 
 ### Added
