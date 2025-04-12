@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2025 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -25,7 +25,7 @@ from .recorder import Recorder16IQ, RecorderMode
 from .spectrometer import Spectrometer
 
 # IP core version
-_version = '0.6.1'
+_version = '0.6.2'
 
 
 class MaiaSDR(Elaboratable):
