@@ -496,25 +496,25 @@ impl Ui {
                 if let Err(e) = prefs.update_ddc_decimation(&decimation) {
                     web_sys::console::error_1(&e);
                 }
-                if let Some(value) = transition_bandwidth {
-                    if let Err(e) = prefs.update_ddc_transition_bandwidth(&value) {
-                        web_sys::console::error_1(&e);
-                    }
+                if let Some(value) = transition_bandwidth
+                    && let Err(e) = prefs.update_ddc_transition_bandwidth(&value)
+                {
+                    web_sys::console::error_1(&e);
                 }
-                if let Some(value) = passband_ripple {
-                    if let Err(e) = prefs.update_ddc_passband_ripple(&value) {
-                        web_sys::console::error_1(&e);
-                    }
+                if let Some(value) = passband_ripple
+                    && let Err(e) = prefs.update_ddc_passband_ripple(&value)
+                {
+                    web_sys::console::error_1(&e);
                 }
-                if let Some(value) = stopband_attenuation_db {
-                    if let Err(e) = prefs.update_ddc_stopband_attenuation_db(&value) {
-                        web_sys::console::error_1(&e);
-                    }
+                if let Some(value) = stopband_attenuation_db
+                    && let Err(e) = prefs.update_ddc_stopband_attenuation_db(&value)
+                {
+                    web_sys::console::error_1(&e);
                 }
-                if let Some(value) = stopband_one_over_f {
-                    if let Err(e) = prefs.update_ddc_stopband_one_over_f(&value) {
-                        web_sys::console::error_1(&e);
-                    }
+                if let Some(value) = stopband_one_over_f
+                    && let Err(e) = prefs.update_ddc_stopband_one_over_f(&value)
+                {
+                    web_sys::console::error_1(&e);
                 }
             }
             let put = maia_json::PutDDCDesign {
@@ -703,10 +703,10 @@ impl Ui {
                 }
             };
             let enabled = ui.elements.geolocation_watch.get().unwrap();
-            if let Ok(mut prefs) = ui.preferences.try_borrow_mut() {
-                if let Err(e) = prefs.update_geolocation_watch(&enabled) {
-                    web_sys::console::error_1(&e);
-                }
+            if let Ok(mut prefs) = ui.preferences.try_borrow_mut()
+                && let Err(e) = prefs.update_geolocation_watch(&enabled)
+            {
+                web_sys::console::error_1(&e);
             }
             if enabled {
                 if ui.geolocation_watch_id.get().is_some() {

@@ -179,10 +179,10 @@ fn stages_design(d: usize, input_samp_rate: f64, config: &Config) -> Result<Deci
     // non-increasing order. Also impose FPGA implementation constraint on max
     // decimation factor per stage.
     let splits = (2..=d.min(constants::MAX_DECIMATION))
-        .filter(|&d1| d % d1 == 0)
+        .filter(|&d1| d.is_multiple_of(d1))
         .flat_map(|d1| {
             (1..=(d / d1).min(constants::MAX_DECIMATION))
-                .filter(move |&d2| d % (d1 * d2) == 0)
+                .filter(move |&d2| d.is_multiple_of(d1 * d2))
                 .filter_map(move |d2| {
                     if d2 > d1 {
                         return None;

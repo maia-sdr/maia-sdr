@@ -314,7 +314,7 @@ impl IpCore {
     fn set_sdr_reset(&self, value: bool) {
         self.registers
             .control()
-            .modify(|_, w| w.sdr_reset().bit(value))
+            .modify(|_, w| w.sdr_reset().bit(value));
     }
 
     async fn log_open(&self) -> Result<()> {
