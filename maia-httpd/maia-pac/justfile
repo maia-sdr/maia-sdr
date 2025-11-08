@@ -1,0 +1,4 @@
+# generate code from svd
+default:
+    svd2rust --edition 2024 --target none -i svd/maia-sdr.svd -o src/
+    cargo fmt
