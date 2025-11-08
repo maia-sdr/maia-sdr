@@ -1,6 +1,6 @@
 [package]
 name = "maia-wasm"
-version = "0.7.0"
+version = "0.7.1"
 edition = "2024"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR WASM frontend"
