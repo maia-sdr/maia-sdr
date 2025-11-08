@@ -1,6 +1,6 @@
 [package]
 name = "maia-httpd"
-version = "0.6.0"
+version = "0.6.1"
 edition = "2024"
 authors = ["Daniel Estevez <daniel@destevez.net>"]
 description = "Maia SDR HTTP server"
@@ -30,7 +30,7 @@ hyper = "1.1"
 libc = "0.2"
 lz4_flex = { version = "0.11.2", features = ["frame"], default-features = true }
 maia-json = { path = "maia-json", version = "0.6.0" }
-maia-pac = { path = "maia-pac", version = "0.5.0"  }
+maia-pac = { path = "maia-pac", version = "0.6.0" }
 mime_guess = "2"
 nix = { version = "0.30", features = ["ioctl", "time"] }
 page_size = "0.6"
