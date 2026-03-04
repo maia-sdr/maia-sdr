@@ -39,8 +39,8 @@ pub use recording::{RecorderFinishWaiter, RecorderState};
 /// server.
 #[derive(Debug)]
 pub struct Server {
-    http_server: axum_server::Server,
-    https_server: Option<axum_server::Server<axum_server::tls_rustls::RustlsAcceptor>>,
+    http_server: axum_server::Server<SocketAddr>,
+    https_server: Option<axum_server::Server<SocketAddr, axum_server::tls_rustls::RustlsAcceptor>>,
     app: Router,
 }
 

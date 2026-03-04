@@ -863,8 +863,7 @@ impl Waterfall {
                 .iter()
                 .copied()
                 .enumerate()
-                .filter(|&(_, n)| 2 * n <= 1 << 16)
-                .next_back()
+                .rfind(|&(_, n)| 2 * n <= 1 << 16)
                 .unwrap();
             freqs.truncate(ndepth);
             nfreqs.truncate(depth + 1);
