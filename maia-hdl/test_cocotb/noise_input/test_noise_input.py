@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024,2026 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -20,7 +20,7 @@ class TB:
         self.axi = AXI4LiteMaster(dut, '', dut.s_axi_lite_clk)
 
 
-@cocotb.test()
+@cocotb.test(timeout_time=1000, timeout_unit="us")
 async def test_noise_input(dut):
     dut.s_axi_lite_rst.value = 1
     dut.clk.value = 0
@@ -36,11 +36,11 @@ async def test_noise_input(dut):
     dut.ARADDR.value = 0
     dut.ARPROT.value = 0
     dut.RREADY.value = 0
-    cocotb.start_soon(Clock(dut.sampling_clk, 16, units='ns').start())
-    cocotb.start_soon(Clock(dut.clk, 12, units='ns').start())
-    cocotb.start_soon(Clock(dut.clk2x_clk, 6, units='ns').start())
-    cocotb.start_soon(Clock(dut.clk3x_clk, 4, units='ns').start())
-    cocotb.start_soon(Clock(dut.s_axi_lite_clk, 10, units='ns').start())
+    cocotb.start_soon(Clock(dut.sampling_clk, 16, unit='ns').start())
+    cocotb.start_soon(Clock(dut.clk, 12, unit='ns').start())
+    cocotb.start_soon(Clock(dut.clk2x_clk, 6, unit='ns').start())
+    cocotb.start_soon(Clock(dut.clk3x_clk, 4, unit='ns').start())
+    cocotb.start_soon(Clock(dut.s_axi_lite_clk, 10, unit='ns').start())
     await ClockCycles(dut.s_axi_lite_clk, 4)
     tb = TB(dut)
     dut.s_axi_lite_rst.value = 0

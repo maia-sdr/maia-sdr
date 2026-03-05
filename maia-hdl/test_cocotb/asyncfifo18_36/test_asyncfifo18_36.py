@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2023,2026 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -26,15 +26,15 @@ async def counter(dut, count, max_iter=1000):
             raise Exception('exceded maximum iterations')
 
 
-@cocotb.test()
+@cocotb.test(timeout_time=100, timeout_unit="us")
 async def test_asyncfifo18_36(dut):
     dut.fifo_rst.value = 1
     dut.read_rst.value = 1
     dut.write_rst.value = 1
     dut.wren.value = 0
     dut.rden.value = 0
-    cocotb.start_soon(Clock(dut.write_clk, 11, units='ns').start())
-    cocotb.start_soon(Clock(dut.read_clk, 10, units='ns').start())
+    cocotb.start_soon(Clock(dut.write_clk, 11, unit='ns').start())
+    cocotb.start_soon(Clock(dut.read_clk, 10, unit='ns').start())
     await ClockCycles(dut.write_clk, 10)
     dut.fifo_rst.value = 0
     dut.read_rst.value = 0

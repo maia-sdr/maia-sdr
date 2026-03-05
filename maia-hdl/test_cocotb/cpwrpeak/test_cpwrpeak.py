@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2023,2026 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -9,12 +9,15 @@
 import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge, FallingEdge
-from cocotb.regression import TestFactory
 
 import random
 
 
-async def run_test(dut, peak_detect=False):
+@cocotb.test(timeout_time=100, timeout_unit="us")
+@cocotb.parametrize(
+    peak_detect=[False, True],
+)
+async def test_cpwrpeak(dut, peak_detect=False):
     dut.rst.value = 1
     dut.clk3x_rst.value = 1
     dut.clken.value = 1
@@ -22,8 +25,8 @@ async def run_test(dut, peak_detect=False):
     dut.im_in.value = 0
     dut.real_in.value = 0
     dut.peak_detect.value = peak_detect
-    cocotb.start_soon(Clock(dut.clk, 12, units='ns').start())
-    cocotb.start_soon(Clock(dut.clk3x_clk, 4, units='ns').start())
+    cocotb.start_soon(Clock(dut.clk, 12, unit='ns').start())
+    cocotb.start_soon(Clock(dut.clk3x_clk, 4, unit='ns').start())
     # We need to wait for 100 ns for GSR to go low
     await ClockCycles(dut.clk, 20)
     dut.rst.value = 0
@@ -47,15 +50,10 @@ async def run_test(dut, peak_detect=False):
             a = re_in[j - dut_delay]
             b = im_in[j - dut_delay]
             c = real_in[j - dut_delay]
-            out = dut.out.value.signed_integer
+            out = dut.out.value.to_signed()
             if peak_detect:
                 assert out == (a**2 + b**2) >> 16
                 is_greater = dut.is_greater.value
                 assert is_greater == ((a**2 + b**2) >= (c << 16))
             else:
                 assert out == (a**2 + b**2 + (c << 16)) >> 16
-
-
-factory = TestFactory(run_test)
-factory.add_option('peak_detect', [False, True])
-factory.generate_tests()

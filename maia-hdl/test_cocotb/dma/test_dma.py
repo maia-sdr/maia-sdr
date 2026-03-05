@@ -19,7 +19,6 @@ from memory import Memory
 
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge
-from cocotb.regression import TestFactory
 
 
 BRAM_SIZE = 4096
@@ -57,8 +56,12 @@ async def check_address(dut):
         await rising
 
 
-async def run_test(dut, backpressure_inserter=None):
-    cocotb.start_soon(Clock(dut.clk, 10, units='ns').start())
+@cocotb.test(timeout_time=1000, timeout_unit="us")
+@cocotb.parametrize(
+    backpressure_inserter=[None, RandomReady(), RandomReady(2, 2)],
+)
+async def test_dma(dut, backpressure_inserter):
+    cocotb.start_soon(Clock(dut.clk, 10, unit='ns').start())
     cocotb.start_soon(check_address(dut))
     dut.rst.value = 1
     dut.start.value = 0
@@ -87,9 +90,3 @@ async def run_test(dut, backpressure_inserter=None):
 
     assert tb.memory._data[:bytes_written] == expected, \
         'memory contents do not match'
-
-
-factory = TestFactory(run_test)
-factory.add_option('backpressure_inserter',
-                   [None, RandomReady(), RandomReady(2, 2)])
-factory.generate_tests()

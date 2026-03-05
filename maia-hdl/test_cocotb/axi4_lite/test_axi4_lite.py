@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2023,2026 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -11,7 +11,6 @@ from cocotb_bus.drivers.amba import AXI4LiteMaster
 
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge, Timer
-from cocotb.regression import TestFactory
 
 
 class Axi4LiteTB:
@@ -20,7 +19,8 @@ class Axi4LiteTB:
         self.axi = AXI4LiteMaster(dut, '', dut.clk)
 
 
-async def run_test(dut):
+@cocotb.test(timeout_time=10, timeout_unit="us")
+async def test_axi4_lite(dut):
     dut.AWVALID.value = 0
     dut.AWADDR.value = 0
     dut.AWPROT.value = 0
@@ -34,7 +34,7 @@ async def run_test(dut):
     dut.RREADY.value = 0
     dut.rst.value = 1
     dut.clk.value = 0
-    cocotb.start_soon(Clock(dut.clk, 10, units='ns').start())
+    cocotb.start_soon(Clock(dut.clk, 10, unit='ns').start())
     await ClockCycles(dut.clk, 2)
     tb = Axi4LiteTB(dut)
     dut.rst.value = 0
@@ -69,7 +69,3 @@ async def run_test(dut):
     await tb.axi.write(0xc, 0xffff1111)
     value = await tb.axi.read(0xc)
     assert value == 0
-
-
-factory = TestFactory(run_test)
-factory.generate_tests()
