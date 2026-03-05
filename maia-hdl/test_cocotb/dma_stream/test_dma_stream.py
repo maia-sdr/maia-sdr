@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2023 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2023,2026 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -29,10 +29,11 @@ MEMORY_BYTES = MEMORY_END - MEMORY_START
 
 
 class DmaStreamWriteTB:
-    def __init__(self, dut):
+    def __init__(self, dut, backpressure_inserter):
         self.memory = Memory(MEMORY_BYTES)
-        self.subordinate = AXI4Slave(dut, None, dut.clk, self.memory)
-        self.backpressure = BitDriver(dut.WREADY, dut.clk)
+        self.subordinate = AXI4Slave(
+            dut, None, dut.clk, self.memory,
+            backpressure_inserter=backpressure_inserter)
 
 
 async def starts(dut):
@@ -62,6 +63,7 @@ async def check_address(dut):
 async def stream_data(dut):
     n = 0
     rising = RisingEdge(dut.clk)
+    dut.stream_valid.value = 0
     while True:
         await rising
         if dut.stream_valid.value and dut.stream_ready.value:
@@ -78,11 +80,8 @@ async def run_test(dut, backpressure_inserter=None):
     dut.start.value = 0
     dut.stop.value = 0
     await ClockCycles(dut.clk, 2)
-    tb = DmaStreamWriteTB(dut)
+    tb = DmaStreamWriteTB(dut, backpressure_inserter)
     dut.rst.value = 0
-
-    if backpressure_inserter:
-        tb.backpressure.start(backpressure_inserter())
 
     bytes_written = 0
     bytes_per_word = 8
