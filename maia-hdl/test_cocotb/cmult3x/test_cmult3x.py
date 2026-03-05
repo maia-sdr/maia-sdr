@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2023-2024 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2023-2024,2026 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -13,7 +13,7 @@ from cocotb.triggers import ClockCycles, RisingEdge, FallingEdge
 import random
 
 
-@cocotb.test()
+@cocotb.test(timeout_time=100, timeout_unit="us")
 async def test_cmult3x(dut):
     dut.rst.value = 1
     dut.clk3x_rst.value = 1
@@ -26,8 +26,8 @@ async def test_cmult3x(dut):
     dut.wide_im_a.value = 0
     dut.wide_re_b.value = 0
     dut.wide_im_b.value = 0
-    cocotb.start_soon(Clock(dut.clk, 12, units='ns').start())
-    cocotb.start_soon(Clock(dut.clk3x_clk, 4, units='ns').start())
+    cocotb.start_soon(Clock(dut.clk, 12, unit='ns').start())
+    cocotb.start_soon(Clock(dut.clk3x_clk, 4, unit='ns').start())
     # We need to wait for 100 ns for GSR to go low
     await ClockCycles(dut.clk, 20)
     dut.rst.value = 0
@@ -60,8 +60,8 @@ async def test_cmult3x(dut):
             b = im_a[j - dut_delay]
             c = re_b[j - dut_delay]
             d = im_b[j - dut_delay]
-            re_out = dut.re_out.value.signed_integer
-            im_out = dut.im_out.value.signed_integer
+            re_out = dut.re_out.value.to_signed()
+            im_out = dut.im_out.value.to_signed()
             assert re_out == a * c - b * d
             assert im_out == a * d + b * c
         if j >= dut_wide_delay:
@@ -69,7 +69,7 @@ async def test_cmult3x(dut):
             wb = wide_im_a[j - dut_wide_delay]
             wc = wide_re_b[j - dut_wide_delay]
             wd = wide_im_b[j - dut_wide_delay]
-            wide_re_out = dut.wide_re_out.value.signed_integer
-            wide_im_out = dut.wide_im_out.value.signed_integer
+            wide_re_out = dut.wide_re_out.value.to_signed()
+            wide_im_out = dut.wide_im_out.value.to_signed()
             assert wide_re_out == wa * wc - wb * wd
             assert wide_im_out == wa * wd + wb * wc

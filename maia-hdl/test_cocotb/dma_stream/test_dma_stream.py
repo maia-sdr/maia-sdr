@@ -20,7 +20,7 @@ from memory import Memory
 
 from cocotb.clock import Clock
 from cocotb.triggers import ClockCycles, RisingEdge
-from cocotb.regression import TestFactory
+
 
 NUM_WRITES = 3  # write 3 buffers per test
 MEMORY_START = 0x0000f000
@@ -73,8 +73,12 @@ async def stream_data(dut):
         dut.stream_valid.value = 1
 
 
-async def run_test(dut, backpressure_inserter=None):
-    cocotb.start_soon(Clock(dut.clk, 10, units='ns').start())
+@cocotb.test(timeout_time=100, timeout_unit="us")
+@cocotb.parametrize(
+    backpressure_inserter=[None, RandomReady(), RandomReady(2, 2)],
+)
+async def test_dma_stream(dut, backpressure_inserter=None):
+    cocotb.start_soon(Clock(dut.clk, 10, unit='ns').start())
     cocotb.start_soon(check_address(dut))
     dut.rst.value = 1
     dut.start.value = 0
@@ -108,9 +112,3 @@ async def run_test(dut, backpressure_inserter=None):
 
     assert tb.memory._data == expected, \
         'memory contents do not match'
-
-
-factory = TestFactory(run_test)
-factory.add_option('backpressure_inserter',
-                   [None, RandomReady(), RandomReady(2, 2)])
-factory.generate_tests()

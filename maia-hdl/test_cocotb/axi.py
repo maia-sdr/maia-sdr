@@ -68,9 +68,9 @@ class AXI4Slave(BusDriver):
             self.bus.BVALID.set(Immediate(0))
         self._memory = memory
 
-        self.write_address_busy = Lock("%s_wabusy" % name)
-        self.read_address_busy = Lock("%s_rabusy" % name)
-        self.write_data_busy = Lock("%s_wbusy" % name)
+        self.write_address_busy = Lock()
+        self.read_address_busy = Lock()
+        self.write_data_busy = Lock()
 
         self._aw = []
         cocotb.start_soon(self._aw_data())
@@ -92,11 +92,11 @@ class AXI4Slave(BusDriver):
             else:
                 self.bus.AWREADY.value = 0
             if self.bus.AWREADY.value and self.bus.AWVALID.value:
-                _awaddr = int(self.bus.AWADDR)
-                _awlen = int(self.bus.AWLEN)
-                _awsize = int(self.bus.AWSIZE)
-                _awburst = int(self.bus.AWBURST)
-                _awprot = int(self.bus.AWPROT)
+                _awaddr = self.bus.AWADDR.value.to_unsigned()
+                _awlen = self.bus.AWLEN.value.to_unsigned()
+                _awsize = self.bus.AWSIZE.value.to_unsigned()
+                _awburst = self.bus.AWBURST.value.to_unsigned()
+                _awprot = self.bus.AWPROT.value.to_unsigned()
                 burst_length = _awlen + 1
                 bytes_in_beat = self._size_to_bytes_in_beat(_awsize)
 
@@ -190,11 +190,11 @@ class AXI4Slave(BusDriver):
                 await clock_re
 
             await ReadOnly()
-            _araddr = int(self.bus.ARADDR)
-            _arlen = int(self.bus.ARLEN)
-            _arsize = int(self.bus.ARSIZE)
-            _arburst = int(self.bus.ARBURST)
-            _arprot = int(self.bus.ARPROT)
+            _araddr = self.bus.ARADDR.value.to_unsigned()
+            _arlen = self.bus.ARLEN.value.to_unsigned()
+            _arsize = self.bus.ARSIZE.value.to_unsigned()
+            _arburst = self.bus.ARBURST.value.to_unsigned()
+            _arprot = self.bus.ARPROT.value.to_unsigned()
 
             burst_length = _arlen + 1
             bytes_in_beat = self._size_to_bytes_in_beat(_arsize)

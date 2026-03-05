@@ -1,5 +1,5 @@
 #
-# Copyright (C) 2022-2024 Daniel Estevez <daniel@destevez.net>
+# Copyright (C) 2022-2024,2026 Daniel Estevez <daniel@destevez.net>
 #
 # This file is part of maia-sdr
 #
@@ -110,10 +110,14 @@ def check_output(tb, sample_stream):
         raise Exception('unable to find match in sample_stream')
 
 
-async def run_test(dut, backpressure_inserter=None):
+@cocotb.test(timeout_time=1000, timeout_unit="us")
+@cocotb.parametrize(
+    backpressure_inserter=[None, RandomReady(), RandomReady(2, 2)],
+)
+async def test_recorder(dut, backpressure_inserter=None):
     sample_stream = []
-    cocotb.start_soon(Clock(dut.clk, 10, units='ns').start())
-    cocotb.start_soon(Clock(dut.iq_clk, 12, units='ns').start())
+    cocotb.start_soon(Clock(dut.clk, 10, unit='ns').start())
+    cocotb.start_soon(Clock(dut.iq_clk, 12, unit='ns').start())
     dut.rst.value = 1
     dut.iq_rst.value = 1
     dut.start.value = 0
@@ -145,7 +149,7 @@ async def run_test(dut, backpressure_inserter=None):
     del sample_stream[:]
     await start(dut)
     await wait_finished(dut)
-    assert dut.next_address.value.integer == MEMORY_END
+    assert dut.next_address.value.to_unsigned() == MEMORY_END
     await ClockCycles(dut.clk, 20)
     assert dut.dropped_samples.value == 0
     check_output(tb, sample_stream)
@@ -158,13 +162,7 @@ async def run_test(dut, backpressure_inserter=None):
     await ClockCycles(dut.clk, 1000)
     await stop(dut)
     await wait_finished(dut)
-    assert dut.next_address.value.integer < MEMORY_END
+    assert dut.next_address.value.to_unsigned() < MEMORY_END
     await ClockCycles(dut.clk, 20)
     assert dut.dropped_samples.value == 0
     check_output(tb, sample_stream)
-
-
-factory = TestFactory(run_test)
-factory.add_option('backpressure_inserter',
-                   [None, RandomReady(), RandomReady(2, 2)])
-factory.generate_tests()
