@@ -28,7 +28,7 @@ git-version = "0.3"
 http = "1.0"
 hyper = "1.1"
 libc = "0.2"
-lz4_flex = { version = "0.12", features = ["frame"], default-features = true }
+lz4_flex = { version = "0.13", features = ["frame"], default-features = true }
 maia-json = { path = "maia-json", version = "0.6.0" }
 maia-pac = { path = "maia-pac", version = "0.6.0" }
 mime_guess = "2"
