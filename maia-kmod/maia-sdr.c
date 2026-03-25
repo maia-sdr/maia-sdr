@@ -18,6 +18,7 @@
 #include <linux/of_device.h>
 #include <linux/of_reserved_mem.h>
 #include <linux/platform_device.h>
+#include <linux/version.h>
 
 #define DRIVER_NAME "maia-sdr"
 
@@ -295,8 +296,8 @@ static int maia_sdr_probe_recording(struct platform_device *pdev)
 
 	cdev_init(&drvdata->cdev, &recording_fops);
 	drvdata->cdev.owner = THIS_MODULE;
-	minor = ida_simple_get(&maia_sdr_device_ida, 0, MAIA_SDR_MINOR_MAX,
-			       GFP_KERNEL);
+	minor = ida_alloc_range(&maia_sdr_device_ida, 0,
+				MAIA_SDR_MINOR_MAX - 1, GFP_KERNEL);
 	if (minor < 0) {
 		ret = minor;
 		goto probe_recording_error;
@@ -350,7 +351,7 @@ probe_recording_error:
 		cdev_del(&drvdata->cdev);
 	}
 	if (minor >= 0) {
-		ida_simple_remove(&maia_sdr_device_ida, minor);
+		ida_free(&maia_sdr_device_ida, minor);
 	}
 	if (!IS_ERR_OR_NULL(drvdata)) {
 		devm_kfree(&pdev->dev, drvdata);
@@ -406,8 +407,8 @@ static int maia_sdr_probe_rxbuffer(struct platform_device *pdev)
 
 	cdev_init(&drvdata->cdev, &rxbuffer_fops);
 	drvdata->cdev.owner = THIS_MODULE;
-	minor = ida_simple_get(&maia_sdr_device_ida, 0, MAIA_SDR_MINOR_MAX,
-			       GFP_KERNEL);
+	minor = ida_alloc_range(&maia_sdr_device_ida, 0,
+				MAIA_SDR_MINOR_MAX - 1, GFP_KERNEL);
 	if (minor < 0) {
 		ret = minor;
 		goto probe_rxbuffer_error;
@@ -461,7 +462,7 @@ probe_rxbuffer_error:
 		cdev_del(&drvdata->cdev);
 	}
 	if (minor >= 0) {
-		ida_simple_remove(&maia_sdr_device_ida, minor);
+		ida_free(&maia_sdr_device_ida, minor);
 	}
 	if (!IS_ERR_OR_NULL(drvdata)) {
 		devm_kfree(&pdev->dev, drvdata);
@@ -502,7 +503,7 @@ static int maia_sdr_probe(struct platform_device *pdev)
 	}
 }
 
-static int maia_sdr_remove_recording(struct platform_device *pdev)
+static void maia_sdr_remove_recording(struct platform_device *pdev)
 {
 	struct maia_sdr_recording_drvdata *drvdata = platform_get_drvdata(pdev);
 
@@ -510,12 +511,11 @@ static int maia_sdr_remove_recording(struct platform_device *pdev)
 	device_remove_file(&pdev->dev, &dev_attr_recording_size);
 	device_destroy(maia_sdr_class, drvdata->device_number);
 	cdev_del(&drvdata->cdev);
-	ida_simple_remove(&maia_sdr_device_ida, MINOR(drvdata->device_number));
+	ida_free(&maia_sdr_device_ida, MINOR(drvdata->device_number));
 	devm_kfree(&pdev->dev, drvdata);
-	return 0;
 }
 
-static int maia_sdr_remove_rxbuffer(struct platform_device *pdev)
+static void maia_sdr_remove_rxbuffer(struct platform_device *pdev)
 {
 	struct maia_sdr_rxbuffer_drvdata *drvdata = platform_get_drvdata(pdev);
 
@@ -523,30 +523,46 @@ static int maia_sdr_remove_rxbuffer(struct platform_device *pdev)
 	device_remove_file(&pdev->dev, &dev_attr_buffer_size);
 	device_destroy(maia_sdr_class, drvdata->device_number);
 	cdev_del(&drvdata->cdev);
-	ida_simple_remove(&maia_sdr_device_ida, MINOR(drvdata->device_number));
+	ida_free(&maia_sdr_device_ida, MINOR(drvdata->device_number));
 	devm_kfree(&pdev->dev, drvdata);
-	return 0;
 }
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+static void maia_sdr_remove(struct platform_device *pdev)
+#else
 static int maia_sdr_remove(struct platform_device *pdev)
+#endif
 {
 	const struct maia_sdr_device_data *devdata;
 	const struct of_device_id *of_id =
 		of_match_device(of_match_ptr(maia_sdr_of_match), &pdev->dev);
 	if (!of_id) {
 		pr_alert("no of_match_device found");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+		return;
+#else
 		return -EINVAL;
+#endif
 	}
 	devdata = of_id->data;
 	switch (devdata->type) {
 	case MAIA_SDR_RECORDING:
-		return maia_sdr_remove_recording(pdev);
+		maia_sdr_remove_recording(pdev);
+		break;
 	case MAIA_SDR_RXBUFFER:
-		return maia_sdr_remove_rxbuffer(pdev);
+		maia_sdr_remove_rxbuffer(pdev);
+		break;
 	default:
 		pr_alert("unsupported device type");
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 11, 0)
+		return;
+#else
 		return -EINVAL;
+#endif
 	}
+#if LINUX_VERSION_CODE < KERNEL_VERSION(6, 11, 0)
+	return 0;
+#endif
 }
 
 MODULE_DEVICE_TABLE(of, maia_sdr_of_match);
@@ -586,7 +602,11 @@ static int __init maia_sdr_init(void)
 		goto error;
 	}
 
+#if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 4, 0)
+	maia_sdr_class = class_create(DRIVER_NAME);
+#else
 	maia_sdr_class = class_create(THIS_MODULE, DRIVER_NAME);
+#endif
 	if (IS_ERR_OR_NULL(maia_sdr_class)) {
 		ret = maia_sdr_class ? PTR_ERR(maia_sdr_class) : -ENOMEM;
 		pr_alert("%s: class_create failed with %d\n", DRIVER_NAME, ret);
