@@ -12,13 +12,13 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Get pull_request info
-      uses: potiuk/get-workflow-origin@v1_5
+      uses: potiuk/get-workflow-origin@v1_6
       id: workflow-run-info
       with:
         token: ${{ secrets.GITHUB_TOKEN }}
         sourceRunId: ${{ github.event.workflow_run.id }}
     - name: Add comment to PR with link to artifacts
-      uses: peter-evans/create-or-update-comment@v2
+      uses: peter-evans/create-or-update-comment@v5
       with:
         issue-number: ${{ steps.workflow-run-info.outputs.pullRequestNumber }}
         body: |
