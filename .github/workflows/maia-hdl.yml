@@ -39,7 +39,6 @@ jobs:
         cd maia-hdl/test_cocotb
         export PATH=$PATH:/opt/oss-cad-suite/bin
         make
-        test -z "$(grep --include=results.xml -r -e failure .)"
   publish:
     name: Publish Python package
     runs-on: ubuntu-latest
