@@ -17,14 +17,14 @@ jobs:
     runs-on: [self-hosted, vivado]
     steps:
     - name: Checkout plutosdr-fw
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         repository: maia-sdr/plutosdr-fw
         submodules: recursive
     - name: Remove maia-sdr submodule
       run: rm -rf maia-sdr
     - name: Checkout maia-sdr
-      uses: actions/checkout@v4
+      uses: actions/checkout@v7
       with:
         path: maia-sdr
         # need to fetch history to get the latest tag with git describe
@@ -34,7 +34,7 @@ jobs:
       run: |
         DOCKER_USER="$(id -u):$(id -g)" docker compose run --rm build        
     - name: Upload artifacts
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: pluto-firmware
         path: |
