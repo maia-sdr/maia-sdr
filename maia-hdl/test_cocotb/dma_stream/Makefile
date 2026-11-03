@@ -10,7 +10,7 @@ MODULE = test_$(DUT)
 
 COMPILE_ARGS += -Wall
 
-export PYTHONPATH := $(PWD)/../..:$(PWD)/..:$(PYTHONPATH)
+export PYTHONPATH := $(CURDIR)/../..:$(CURDIR)/..:$(PYTHONPATH)
 
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim

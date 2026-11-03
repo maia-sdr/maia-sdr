@@ -15,7 +15,7 @@ MODULE = test_asyncfifo18_36
 
 COMPILE_ARGS += -Wall
 
-export PYTHONPATH := $(PWD)/../..:$(PYTHONPATH)
+export PYTHONPATH := $(CURDIR)/../..:$(PYTHONPATH)
 
 # include cocotb's make rules to take care of the simulator setup
 include $(shell cocotb-config --makefiles)/Makefile.sim
