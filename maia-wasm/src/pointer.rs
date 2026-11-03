@@ -91,15 +91,11 @@ impl PointerTracker {
     fn record_event(&mut self, event: PointerEvent) {
         let pointer_id = event.pointer_id();
         // Search previous event with same pointer ID.
-        if let Some(slot) = self.slots.iter_mut().find_map(|x| {
-            x.as_mut().and_then(|x| {
-                if x.event.pointer_id() == pointer_id {
-                    Some(x)
-                } else {
-                    None
-                }
-            })
-        }) {
+        if let Some(slot) = self
+            .slots
+            .iter_mut()
+            .find_map(|x| x.as_mut().filter(|x| x.event.pointer_id() == pointer_id))
+        {
             // Replace event with the new one.
             slot.event = event;
             return;
@@ -139,15 +135,9 @@ impl PointerTracker {
     }
 
     fn get_pointer(&self, pointer_id: i32) -> Option<&Pointer> {
-        self.slots.iter().find_map(|x| {
-            x.as_ref().and_then(|x| {
-                if x.event.pointer_id() == pointer_id {
-                    Some(x)
-                } else {
-                    None
-                }
-            })
-        })
+        self.slots
+            .iter()
+            .find_map(|x| x.as_ref().filter(|&x| x.event.pointer_id() == pointer_id))
     }
 
     /// Handler for the pointer move event.
@@ -205,15 +195,7 @@ impl PointerTracker {
         let other = self
             .slots
             .iter()
-            .find_map(|x| {
-                x.as_ref().and_then(|x| {
-                    if x.event.pointer_id() != pointer_id {
-                        Some(x)
-                    } else {
-                        None
-                    }
-                })
-            })
+            .find_map(|x| x.as_ref().filter(|&x| x.event.pointer_id() != pointer_id))
             .unwrap();
         let same_x = same.event.client_x() as f32;
         let same_y = same.event.client_y() as f32;
