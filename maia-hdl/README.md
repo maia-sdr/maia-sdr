@@ -50,10 +50,7 @@ simulator such as [Icarus Verilog](http://iverilog.icarus.com/). Verilog code is
 generated from the Amaranth code, so the simulation involves only Verilog code
 and the Python code running from cocotb. The test execution of cocotb is based
 on Makefiles. Tests can be run by running `make` from the `test_cocotb`
-directory. It is possible to check which tests failed with
-```
-grep --include=results.xml -r -e failure .
-```
+directory. If any of the tests fails, `make` exits with a non-zero exit code.
 
 Running the mixed Amaranth/Verilog tests also requires yosys to be installed.
 
