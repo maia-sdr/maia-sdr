@@ -672,7 +672,7 @@ impl Mode {
 }
 
 fn unpack_12bit_to_16bit(output: &mut [u8], input: &[u8]) {
-    for (j, x) in input.chunks_exact(3).enumerate() {
+    for (j, x) in input.as_chunks::<3>().0.iter().enumerate() {
         output[4 * j] = (x[0] << 4) | (x[1] >> 4);
         output[4 * j + 1] = ((x[0] & 0xf0) as i8 >> 4) as u8;
         output[4 * j + 2] = x[2];
